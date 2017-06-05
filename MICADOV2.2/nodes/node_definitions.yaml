@@ -1,0 +1,61 @@
+'node_def:db':
+  - 
+    resource:
+      type: ec2
+      endpoint: replace_with_endpoint_of_ec2_interface_of_your_cloud
+      regionname: replace_with_regionname_of_your_ec2_interface
+      image_id: replace_with_id_of_your_image_on_your_target_cloud
+      instance_type: replace_with_instance_type_of_your_image_on_your_target_cloud
+      key_name: replace_with_key_name_on_your_target_cloud
+      security_group_ids:
+        -
+          replace_with_security_group_id1_on_your_target_cloud
+        -
+          replace_with_security_group_id2_on_your_target_cloud
+      subnet_id: replace_with_subnet_id_on_your_target_cloud
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://cloud_init_db.yaml
+
+'node_def:central':
+  - 
+    resource:
+      type: ec2
+      endpoint: replace_with_endpoint_of_ec2_interface_of_your_cloud
+      regionname: replace_with_regionname_of_your_ec2_interface
+      image_id: replace_with_id_of_your_image_on_your_target_cloud
+      instance_type: replace_with_instance_type_of_your_image_on_your_target_cloud
+      key_name: replace_with_key_name_on_your_target_cloud
+      security_group_ids:
+        -
+          replace_with_security_group_id1_on_your_target_cloud
+        -
+          replace_with_security_group_id2_on_your_target_cloud
+      subnet_id: replace_with_subnet_id_on_your_target_cloud
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://cloud_init_central.yaml
+
+'node_def:app':
+  -
+    resource:
+      type: ec2
+      endpoint: replace_with_endpoint_of_ec2_interface_of_your_cloud
+      regionname: replace_with_regionname_of_your_ec2_interface
+      image_id: replace_with_id_of_your_image_on_your_target_cloud
+      instance_type: replace_with_instance_type_of_your_image_on_your_target_cloud
+      key_name: replace_with_key_name_on_your_target_cloud
+      security_group_ids:
+        -
+          replace_with_security_group_id1_on_your_target_cloud
+        -
+          replace_with_security_group_id2_on_your_target_cloud
+      subnet_id: replace_with_subnet_id_on_your_target_cloud
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://cloud_init_app.yaml
+
+

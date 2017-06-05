@@ -1,0 +1,59 @@
+#cloud-config
+#preserve_hostname: true
+#manage_etc_hosts: false
+
+write_files:
+# set hostname
+- content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+# mysql, dnsmasq
+packages:
+- mysql-server
+- unzip
+- dnsmasq
+
+runcmd:
+- /bin/consul-set-network.sh
+- dhclient
+# mysql
+- mysqladmin -u root password '{{variables.mysql_root_password}}'
+- mysql -u root --password='{{variables.mysql_root_password}}' -e "create database {{variables.mysql_database_name}}; create user '{{variables.mysql_dbuser_username}}'@'%' identified by '{{variables.mysql_dbuser_password}}'; grant all privileges on {{variables.mysql_database_name}}.* to '{{variables.mysql_dbuser_username}}'@'%'; flush privileges;"
+- sed -i 's/127.0.0.1/0.0.0.0/' /etc/mysql/my.cnf
+- service mysql restart

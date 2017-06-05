@@ -1,0 +1,31 @@
+'node_def:prometheus':
+  - resource:
+      type: ec2
+      endpoint: http://cfe2.lpds.sztaki.hu:4567
+      regionname: ROOT
+      image_id: ami-00001599
+      instance_type: m1.medium
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://prometheus_cloud_init_docker.yaml
+#   health_check: 
+#     urls:
+#     - http://{{ip}}:9090
+
+'node_def:da':
+  - resource:
+      type: ec2
+      endpoint: http://cfe2.lpds.sztaki.hu:4567
+      regionname: ROOT
+      image_id: ami-00001599
+      instance_type: m1.medium
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://da_cloud_init_docker.yaml
+#   health_check: 
+#     urls:
+#     - http://{{ip}}:8080
+#     - http://{{ip}}:8080/{{variables.da_webapp_name}}
+

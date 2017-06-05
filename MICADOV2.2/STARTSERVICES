@@ -1,0 +1,2 @@
+docker service create --name "stress60" --limit-cpu=0.6 progrium/stress --cpu 1 --io 1 --vm 1 --vm-bytes 128M
+docker service create --name "stress30" --limit-cpu=0.3 progrium/stress --cpu 1 --io 1 --vm 1 --vm-bytes 128M

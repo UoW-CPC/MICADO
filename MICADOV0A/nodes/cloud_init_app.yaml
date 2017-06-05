@@ -1,0 +1,125 @@
+#cloud-config
+
+packages:
+  - unzip
+  - tomcat7
+
+write_files:
+# consul config
+- content: |
+    {
+    "server": false,
+    "datacenter": "micado",
+    "data_dir": "/var/consul",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": true,
+    "retry_join": ["{{getip(variables.consul_host)}}"], 
+    "rejoin_after_leave": true,
+    "services": [{"name":"app_cluster","port":9100}]
+    }
+  path: /etc/consul.d/client/config.json
+# consul app health check
+- content: |
+    {
+      "check": {
+      "id": "app-check",
+      "name": "app Status",
+      "http": "http://localhost:8080/{{variables.da_webapp_name}}",
+      "service_id" : "app_cluster",
+      "interval": "60s",
+      "timeout": "10s"
+      }
+    }
+  path: /etc/consul.d/client/app.json
+# service consul
+- content: |
+    description "Consul agent"
+    start on networking
+    stop on runlevel [06]
+    respawn
+    setuid consul
+    setgid consul
+    exec consul agent -config-dir /etc/consul.d/client -bind=$(hostname --ip-address) -client 0.0.0.0 >/var/consul/consul.log
+  path: /etc/init/consul.conf
+# set hostname
+- content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+
+ # node_exporter service
+- path: /etc/init/node_exporter.conf
+  content: |
+    start on startup
+    setuid prometheus
+    setgid prometheus
+    script
+      cd /opt/prometheus
+      ./node_exporter > /opt/prometheus/node_exporter.log 
+    end script
+
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+runcmd:
+- /bin/consul-set-network.sh
+- adduser --disabled-password --gecos "" prometheus
+- sudo dhclient
+- echo "{{getip(variables.consul_host)}} dataavenue.database" | tee -a /etc/hosts
+# consul
+- sudo useradd consul
+- wget https://releases.hashicorp.com/consul/0.5.2/consul_0.5.2_linux_amd64.zip
+- unzip *.zip
+- rm *.zip
+- sudo cp consul /usr/local/bin/
+# config
+- sudo mkdir /var/consul
+- sudo chown consul:consul /var/consul
+- sudo chown consul:consul /etc/consul.d/client
+# bootstrap
+- sudo service consul start
+# tomcat config
+- sed -i 's/^JAVA_OPTS=.*$/JAVA_OPTS="-Xmx1024m -XX:MaxPermSize=512m -XX:+CMSClassUnloadingEnabled -XX:+UseConcMarkSweepGC"/' /etc/default/tomcat7
+- sudo chown tomcat7:tomcat7 /usr/share/tomcat7
+- sudo service tomcat7 restart
+- wget --no-check-certificate -O /var/lib/tomcat7/webapps/{{variables.app_webapp_name}}.war https://dataavenue.s3.lpds.sztaki.hu/blacktop3.war
+- mkdir /opt/prometheus/
+# Nodeexporter config
+- wget https://github.com/prometheus/node_exporter/releases/download/0.12.0/node_exporter-0.12.0.linux-amd64.tar.gz -O node_exporter.tar.gz
+- tar -xvzf node_exporter.tar.gz
+- cp node_exporter-0.12.0.linux-amd64/node_exporter /opt/prometheus/
+- chown -R prometheus:prometheus /opt/prometheus/ 
+- sudo service node_exporter start

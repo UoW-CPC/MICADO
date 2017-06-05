@@ -1,0 +1,88 @@
+#cloud-config
+
+packages:
+  - unzip
+# - default-jdk # jsp
+  - tomcat7
+# - tomcat7-admin
+
+groups:
+- prometheus
+
+users:
+- name: prometheus
+  gecos: Prometheus server
+  primary-group: prometheus
+  system: true
+
+write_files:
+
+- content: |
+    {
+    "server": false,
+    "datacenter": "dataavenue",
+    "data_dir": "/var/consul",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "retry_join": ["{{getip(variables.consul_host)}}"], 
+    "rejoin_after_leave": true,
+    "services": [{"name":"da_cluster","port":9100}]
+    }
+  path: /etc/consul/config.json
+
+
+# set hostname
+- content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+
+runcmd:
+# host: ubuntu
+  - sudo dhclient
+  - echo "{{getip(variables.consul_host)}} dataavenue.database" | tee -a /etc/hosts
+# Docker, Kubernetes Install
+  - apt-get update
+  - apt-get install -y apt-transport-https ca-certificates
+  - apt-key adv --keyserver hkp://ha.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D 
+  - echo "deb https://apt.dockerproject.org/repo ubuntu-xenial main" | tee /etc/apt/sources.list.d/docker.list
+  - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+  - echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | tee /etc/apt/sources.list.d/kubernetes.list
+  - apt-get update
+  - apt-get install -y docker-engine kubelet kubeadm kubectl kubernetes-cni
+  - service docker start
+  - usermod -aG docker $USER
+  - systemctl enable docker
+  - kubeadm join --token=aafedd.b6c89b8a714aa45b {{getip(variables.consul_host)}}
+
+# tomcat config
+  - sed -i 's/^JAVA_OPTS=.*$/JAVA_OPTS="-Xmx1024m -XX:MaxPermSize=512m -XX:+CMSClassUnloadingEnabled -XX:+UseConcMarkSweepGC"/' /etc/default/tomcat7
+  - sudo chown tomcat7:tomcat7 /usr/share/tomcat7
+  - sudo service tomcat7 restart
+  - wget --no-check-certificate -O /var/lib/tomcat7/webapps/{{variables.da_webapp_name}}.war https://dataavenue.s3.lpds.sztaki.hu/blacktop3.war
+  - mkdir /opt/prometheus/
+
+# da dockers start
+  - sudo docker run -d -p 9100:9100 prom/node-exporter
+  - export IP=$(hostname --ip-address)
+  - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.consul_host)}} -config-file=/etc/consul/config.json 
