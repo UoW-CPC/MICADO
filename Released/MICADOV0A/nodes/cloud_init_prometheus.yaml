@@ -1,0 +1,190 @@
+#cloud-config
+packages:
+- unzip
+
+write_files:
+# Prometheus config
+- path: /opt/prometheus/monitor_prometheus.yml
+  content: |
+    rule_files:
+    - 'prometheus.rules'
+    scrape_configs:
+    - job_name: cluster_monitoring
+      scrape_interval: 10s
+      consul_sd_configs:
+      - server: '{{getip(variables.consul_host)}}:8500'
+        datacenter: micado
+        services: ['lb_cluster', 'app_cluster']
+      relabel_configs:
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'job'
+        replacement:   '$1'
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'group'
+        replacement:   '$1'
+
+# Prometheus rules (expressions and alerts)
+- path: /opt/prometheus/prometheus.rules
+  content: |
+    loadbalancing_cpu_utilization = 100 - (avg (rate(node_cpu{group="lb_cluster",mode="idle"}[60s])) * 100)
+    application_cpu_utilization = 100 - (avg (rate(node_cpu{group="app_cluster",mode="idle"}[60s])) * 100)
+
+    application_ram_utilization = (sum(node_memory_MemFree{job="app_cluster"}) / sum(node_memory_MemTotal{job="app_cluster"})) * 100
+    loadbalancing_ram_utilization = (sum(node_memory_MemFree{job="lb_cluster"}) / sum(node_memory_MemTotal{job="lb_cluster"})) * 100
+
+    loadbalancing_hdd_utilization = sum(node_filesystem_free{job="lb_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="lb_cluster",mountpoint="/", device="rootfs"}) *100
+    application_hdd_utilization = sum(node_filesystem_free{job="app_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="app_cluster",mountpoint="/", device="rootfs"}) *100
+
+
+    ALERT loadbalancing_overloaded
+      IF loadbalancing_cpu_utilization > 80
+      FOR 1m
+      LABELS {alert="overloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "lb cluster overloaded",
+      description = "lb cluster average CPU utilization is overloaded"}
+    ALERT loadbalancing_underloaded
+      IF loadbalancing_cpu_utilization < 20
+      FOR 2m
+      LABELS {alert="underloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "lb cluster underloaded",
+      description = "lb cluster average CPU utilization is underloaded"}
+    ALERT application_overloaded
+      IF application_cpu_utilization > 80
+      FOR 1m
+      LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "app cluster overloaded",
+      description = "app cluster average CPU utilization is overloaded"}
+    ALERT application_underloaded
+      IF application_cpu_utilization < 20
+      FOR 2m
+      LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "app cluster underloaded",
+      description = "app cluster average CPU utilization is underloaded"}
+
+
+
+# Prometheus service
+- path: /etc/init/prometheus.conf
+  content: |
+    start on startup
+    setuid prometheus
+
+    setgid prometheus
+    script
+      cd /opt/prometheus
+      ./prometheus -config.file /opt/prometheus/monitor_prometheus.yml -alertmanager.url=http://localhost:9093 >/opt/prometheus/prometheus.log 2>&1
+    end script
+
+# alertmanager service
+- path: /etc/init/prometheus_alertmanager.conf
+  content: |
+    start on startup
+    setuid prometheus
+
+    setgid prometheus
+    script
+      cd /opt/prometheus
+      ./alertmanager -config.file=/opt/prometheus/alertmanager.conf >/opt/prometheus/prometheus_alertmanager.log 2>&1
+    end script
+
+# prometheus executor service
+- path: /etc/init/prometheus_executor.conf
+  content: |
+    start on startup
+    setuid prometheus
+
+    setgid prometheus
+    script
+      cd /opt/prometheus/prometheus_executor
+      ./executor -l 127.0.0.1:9095 ./executor_conf.sh >/opt/prometheus/prometheus_executor.log 2>&1
+    end script
+
+# alertmanager
+- path: /opt/prometheus/alertmanager.conf
+  content: |
+    global:
+    
+    # The root route on which each incoming alert enters.
+    # The root route with all parameters, which are inherited by the child
+    # routes if they are not overwritten.
+    route:
+      receiver: 'default'
+      group_wait: 10s
+      group_interval: 20s
+      repeat_interval: 3m
+      group_by: [cluster, alertname]
+    
+      routes:
+      - match:
+          alertname: lb_underloaded
+      - receiver: default
+    
+    receivers:
+    - name: 'default'
+      webhook_configs: 
+       - url: http://localhost:9095
+
+# executor config
+- path: /opt/prometheus/prometheus_executor/executor_conf.sh
+  content: |
+    #!/bin/bash
+    
+    if [[ "$AMX_STATUS" != "firing" ]]; then
+      exit 0
+    fi
+    
+    over_loaded() {
+      curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
+    }
+    
+    under_loaded() {
+      curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
+    }
+    
+    main() {
+      for i in $(seq 1 "$AMX_ALERT_LEN"); do
+        alert="AMX_ALERT_${i}_LABEL_alert"
+        infra="AMX_ALERT_${i}_LABEL_infra_id"
+        node="AMX_ALERT_${i}_LABEL_node"
+    
+        if [ "${!alert}" = "overloaded" ]
+        then
+            over_loaded "${!infra}" "${!node}"
+        else
+            under_loaded "${!infra}" "${!node}"
+        fi
+      done
+      wait
+    }
+
+    main "$@"
+#- rm -rf /opt/prometheus/prometheus-0.20.0.linux-amd64
+runcmd:
+- adduser --disabled-password --gecos "" prometheus
+- mkdir -p /opt/prometheus/
+- mkdir -p /opt/prometheus/prometheus_executor
+- wget "https://github.com/prometheus/prometheus/releases/download/0.20.0/prometheus-0.20.0.linux-amd64.tar.gz" -O prometheus.tar.gz
+- tar -xvzf prometheus.tar.gz -C /opt/prometheus/
+- rm /opt/prometheus/prometheus-0.20.0.linux-amd64/prometheus.yml
+- cp -R /opt/prometheus/prometheus-0.20.0.linux-amd64/prometheus /opt/prometheus/
+- chown -R prometheus:prometheus /opt/prometheus/
+- wget "https://github.com/occopus/docs/raw/devel/tutorial/autoscaling-dataavenue/deploy/prometheus/alertmanager" -O alertmanager
+- wget "https://github.com/occopus/docs/raw/devel/tutorial/autoscaling-dataavenue/deploy/prometheus/executor" -O executor
+- chmod 777 alertmanager
+- chmod 777 executor
+- chmod 777 /opt/prometheus/prometheus_executor/executor_conf.sh
+- mv alertmanager /opt/prometheus
+- mv executor /opt/prometheus/prometheus_executor
+- sudo rm -rvf /opt/prometheus/data/*
+- echo "Starting prometheus services..."
+- sudo service prometheus start
+- sudo service prometheus_executor start
+- sleep 2
+- sudo service prometheus_alertmanager start
+

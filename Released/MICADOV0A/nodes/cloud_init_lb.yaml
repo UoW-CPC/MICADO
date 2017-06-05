@@ -1,0 +1,188 @@
+#cloud-config
+
+# packages
+packages:
+- unzip # for consul agent
+- haproxy
+
+# haproxy repository
+apt_sources:
+- source: "ppa:vbernat/haproxy-1.5"
+
+# apt-get update
+apt_update: true
+
+# files
+write_files:
+# DHCP hook
+- path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+  content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  
+  # Consul config
+- path: /etc/consul.d/client/config.json
+  content: |
+    {
+    "server": false,
+    "datacenter": "micado",
+    "data_dir": "/var/consul",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": true,
+    "retry_join": ["{{getip(variables.consul_host)}}"], 
+    "rejoin_after_leave": true,
+    "services": [{"name": "lb_cluster","port": 9100}]
+    }
+
+  # Consul service
+- path: /etc/init/consul.conf
+  content: |
+    description "Consul agent"
+    start on networking
+    stop on runlevel [06]
+    respawn
+    setuid consul
+    setgid consul
+    exec consul agent -config-dir /etc/consul.d/client -bind=$(hostname --ip-address) -client 0.0.0.0 >/var/consul/consul.log
+
+  # HAProxy config
+- path: /etc/haproxy/haproxy.cfg
+  content: |
+    global 
+      maxconn 2048
+      tune.ssl.default-dh-param 2048
+      log 127.0.0.1 local1 notice
+    defaults
+      log global
+      timeout connect 5000
+      timeout client  36000000
+      timeout server  36000000
+      option http-server-close
+    frontend http-frontend
+      bind *:80
+      default_backend application
+    frontend https-frontend
+      bind *:443 ssl crt /etc/ssl/private/mypem.pem
+      reqadd X-Forwarded-Proto:\ https
+      default_backend application
+    backend application
+      redirect scheme https if !{ ssl_fc }
+
+  # Consul-template template
+- path: /etc/haproxy/haproxy.ctmpl
+  content: |
+    global 
+      maxconn 2048
+      tune.ssl.default-dh-param 2048
+      log 127.0.0.1 local1 notice
+    defaults
+      log global
+      timeout connect 5000
+      timeout client  36000000
+      timeout server  36000000
+      option http-server-close
+    frontend http-frontend
+      bind *:80
+      default_backend application
+    frontend https-frontend
+      bind *:443 ssl crt /etc/ssl/private/mypem.pem
+      reqadd X-Forwarded-Proto:\ https
+      default_backend application
+    backend application
+      redirect scheme https if !{ ssl_fc }
+      balance leastconn {{'{{'}}range service "app_cluster"{{'}}'}}
+      server {{'{{'}}.Node{{'}}'}} {{'{{'}}.Address{{'}}'}}:{{variables.applicationport}}{{'{{'}}end{{'}}'}}
+
+  # Consul-template service
+- path: /etc/init/consul-template.conf
+  content: |
+    description "Consul-template"
+    start on networking
+    stop on runlevel [06]
+    respawn
+    exec consul-template -consul {{getip(variables.consul_host)}}:8500 -template "/etc/haproxy/haproxy.ctmpl:/etc/haproxy/haproxy.cfg:service haproxy reload"
+
+# node_exporter service
+- path: /etc/init/node_exporter.conf
+  content: |
+    start on startup
+    setuid prometheus
+    setgid prometheus
+    script
+      cd /opt/prometheus
+      ./node_exporter > /opt/prometheus/node_exporter.log 
+    end script
+
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+# Run on restart
+runcmd:
+- /bin/consul-set-network.sh
+- adduser --disabled-password --gecos "" prometheus
+- sudo dhclient
+# SSL host certificate
+- openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout mykey.key -subj "/C=HU/ST=HU/L=Budapest/O=SZTAKI LPDS/CN=Data Avenue" -out mycert.crt
+- cat mycert.crt mykey.key > mypem.pem
+- sudo cp mypem.pem /etc/ssl/private/
+# HAProxy logging
+- echo "\$ModLoad imudp" | sudo tee -a /etc/rsyslog.conf
+- echo "\$UDPServerAddress 127.0.0.1" | sudo tee -a /etc/rsyslog.conf
+- echo "\$UDPServerRun 514" | sudo tee -a /etc/rsyslog.conf
+- restart rsyslog
+# Consul-template install
+- wget https://releases.hashicorp.com/consul-template/0.11.1/consul-template_0.11.1_linux_amd64.zip
+- unzip consul-template_0.11.1_linux_amd64.zip
+- sudo cp consul-template /usr/local/bin/
+# Consul-template start
+- service consul-template start
+# Consul install
+- wget https://releases.hashicorp.com/consul/0.5.2/consul_0.5.2_linux_amd64.zip
+- unzip consul_0.5.2_linux_amd64.zip
+- sudo cp consul /usr/local/bin/
+# Consul config
+- sudo mkdir /var/consul
+- sudo useradd consul
+- sudo chown consul:consul /var/consul
+- sudo chown consul:consul /etc/consul.d/client
+# Consul service
+- sudo service consul start
+- mkdir /opt/prometheus/
+- wget https://github.com/prometheus/node_exporter/releases/download/0.12.0/node_exporter-0.12.0.linux-amd64.tar.gz -O node_exporter.tar.gz
+- tar -xvzf node_exporter.tar.gz
+- cp node_exporter-0.12.0.linux-amd64/node_exporter /opt/prometheus/
+- chown -R prometheus:prometheus /opt/prometheus/ 
+- sudo service node_exporter start

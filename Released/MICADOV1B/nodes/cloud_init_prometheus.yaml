@@ -1,0 +1,232 @@
+#cloud-config
+#preserve_hostname: true
+#manage_etc_hosts: false
+
+packages:
+- unzip
+- dnsmasq
+
+
+write_files:
+# consul config
+- content: |
+    {
+    "server": true,
+    "datacenter": "application",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "service": { "name": "prometheus" }
+    }
+  path: /etc/consul/config.json
+
+# set hostname
+- content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+#------------------
+
+# Prometheus config
+- path: /etc/prometheus/prometheus.yml
+  content: |
+    rule_files:
+    - 'prometheus.rules'
+    scrape_configs:
+    - job_name: cluster_monitoring
+      scrape_interval: 10s
+      consul_sd_configs:
+      - server: '172.31.0.5:8500'
+        datacenter: application
+        services: ['lb_cluster', 'app_cluster']
+      relabel_configs:
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'job'
+        replacement:   '$1'
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'group'
+        replacement:   '$1'
+    alerting:
+      alertmanagers:
+      - scheme: http
+        static_configs:
+        - targets:
+          - "172.31.0.3:9093"
+
+# Prometheus rules (expressions and alerts)
+- path: /etc/prometheus/prometheus.rules
+  content: |
+
+    lb_cpu_utilization = 100 - (avg (rate(node_cpu{group="lb_cluster",mode="idle"}[60s])) * 100)
+    app_cpu_utilization = 100 - (avg (rate(node_cpu{group="app_cluster",mode="idle"}[60s])) * 100)
+
+    app_ram_utilization = (sum(node_memory_MemFree{job="app_cluster"}) / sum(node_memory_MemTotal{job="app_cluster"})) * 100
+    lb_ram_utilization = (sum(node_memory_MemFree{job="lb_cluster"}) / sum(node_memory_MemTotal{job="lb_cluster"})) * 100
+
+    lb_hdd_utilization = sum(node_filesystem_free{job="lb_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="lb_cluster",mountpoint="/", device="rootfs"}) *100
+    app_hdd_utilization = sum(node_filesystem_free{job="app_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="app_cluster",mountpoint="/", device="rootfs"}) *100
+
+
+    ALERT lb_overloaded
+      IF lb_cpu_utilization > 60
+      FOR 1m
+      LABELS {alert="overloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "LB cluster overloaded",
+      description = "LB cluster average CPU utilization is overloaded"}
+    ALERT lb_underloaded
+      IF lb_cpu_utilization < 20
+      FOR 2m
+      LABELS {alert="underloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "LB cluster underloaded",
+      description = "LB cluster average CPU utilization is underloaded"}
+    ALERT app_overloaded
+      IF app_cpu_utilization > 60
+      FOR 1m
+      LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "Application cluster overloaded",
+      description = "Application cluster average CPU utilization is overloaded"}
+    ALERT app_underloaded
+      IF app_cpu_utilization < 20
+      FOR 2m
+      LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}"}
+      ANNOTATIONS {
+      summary = "Application cluster underloaded",
+      description = "Application cluster average CPU utilization is underloaded"}
+
+
+
+
+# alertmanager
+- path: /etc/alertmanager/config.yml
+  content: |
+    global:
+    
+    # The root route on which each incoming alert enters.
+    # The root route with all parameters, which are inherited by the child
+    # routes if they are not overwritten.
+    route:
+      receiver: 'default'
+      group_wait: 10s
+      group_interval: 20s
+      repeat_interval: 5m
+      group_by: [cluster, alertname]
+    
+    receivers:
+    - name: 'default'
+      webhook_configs: 
+       - url: http://172.31.0.4:9095
+
+# executor config
+- path: /etc/prometheus_executor/conf.sh
+  content: |
+    #!/bin/bash
+    
+    if [[ "$AMX_STATUS" != "firing" ]]; then
+      exit 0
+    fi
+    
+    over_loaded() {
+      curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
+    }
+    
+    under_loaded() {
+      curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
+    }
+    
+    main() {
+      for i in $(seq 1 "$AMX_ALERT_LEN"); do
+        alert="AMX_ALERT_${i}_LABEL_alert"
+        infra="AMX_ALERT_${i}_LABEL_infra_id"
+        node="AMX_ALERT_${i}_LABEL_node"
+    
+        if [ "${!alert}" = "overloaded" ]
+        then
+            over_loaded "${!infra}" "${!node}"
+        else
+            under_loaded "${!infra}" "${!node}"
+        fi
+      done
+      wait
+    }
+
+    main "$@"
+
+# Docker API
+- path: /etc/systemd/system/docker-tcp.socket
+  content: |
+   [Unit]
+   Description=Docker Socket for the API
+   [Socket]
+   ListenStream=2375
+   Service=docker.service
+   [Install]
+   WantedBy=sockets.target
+
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+runcmd:
+  - adduser --disabled-password --gecos "" prometheus
+  - /bin/consul-set-network.sh
+  - sudo dhclient
+  - chmod 777 /etc/prometheus_executor/conf.sh
+# Docker install
+  - apt-get update
+  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update
+  - apt-get install -y docker-ce
+  - systemctl enable docker
+  - systemctl enable docker-tcp.socket
+  - systemctl enable docker.socket
+  - systemctl stop docker
+  - systemctl start docker-tcp.socket
+  - systemctl start docker
+# Start Swarm
+  - export IP=$(hostname --ip-address); docker swarm init --advertise-addr=$IP
+  - docker node update --availability drain $(hostname)
+#Start infra. services
+  - docker network create -d bridge my-net --subnet 172.31.0.0/24
+  - docker run -d --network=my-net --ip="172.31.0.2" -p 9090:9090 -v /etc/:/etc prom/prometheus
+  - docker run -d --network=my-net --ip="172.31.0.3" -v /etc/alertmanager/:/etc/alertmanager/ -p 9093:9093 prom/alertmanager
+  - docker run -d --network=my-net --ip="172.31.0.4" -p 9095:9095 -v /etc/prometheus_executor/:/etc/prometheus_executor rabotond/prometheus_executor
+  - export IP=$(hostname --ip-address)
+  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP  -bootstrap=true -config-file=/etc/consul/config.json
