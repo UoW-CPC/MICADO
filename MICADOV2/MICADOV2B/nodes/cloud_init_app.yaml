@@ -5,7 +5,6 @@
 packages:
   - unzip
 
-
 write_files:
 
 - content: |
@@ -16,7 +15,7 @@ write_files:
     "encrypt": "uohStneoKEoVYZIASGp6Nw==",
     "log_level": "INFO",
     "enable_syslog": false,
-    "retry_join": ["{{getip(variables.consul_host)}}"], 
+    "retry_join": ["{{getip(variables.central_host)}}"], 
     "rejoin_after_leave": true,
     "services": [{"name":"app_cluster","port":9100}, {"name":"app_docker_cluster","port":9200}]
     }
@@ -83,14 +82,14 @@ runcmd:
   - systemctl start docker-tcp.socket
   - systemctl start docker
 # Connect to Swarm
-  - wget --retry-connrefused -qO /tmp/swarm_join {{getip(variables.consul_host)}}:2375/v1.26/swarm
+  - wget --retry-connrefused -qO /tmp/swarm_join {{getip(variables.central_host)}}:2375/v1.26/swarm
   - export TOKEN=$(grep -Eo 'SWMTKN-[[:alnum:]]*-[[:alnum:]]*-[[:alnum:]]*' /tmp/swarm_join | head -1)
-  - docker swarm join --token $TOKEN {{getip(variables.consul_host)}}:2377
+  - docker swarm join --token $TOKEN {{getip(variables.central_host)}}:2377
 
 # Infra services start
   - sudo docker run -d -p 9100:9100 prom/node-exporter
   - export IP=$(hostname --ip-address)
-  - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.consul_host)}} -config-file=/etc/consul/config.json 
+  - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.central_host)}} -config-file=/etc/consul/config.json 
   - sudo docker run  --volume=/:/rootfs:ro  --volume=/var/run:/var/run:rw  --volume=/sys:/sys:ro  --volume=/var/lib/docker/:/var/lib/docker:ro  --publish=9200:8080  --detach=true  --name=cadvisor google/cadvisor:latest
 
 # Start application service

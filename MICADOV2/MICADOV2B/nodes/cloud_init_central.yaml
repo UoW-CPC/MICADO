@@ -168,10 +168,9 @@ write_files:
       #create new rules
       if [ -n "$name" ]; then
       if grep -q $name "/etc/prometheus/prometheus.rules"; then
-          echo "already exists"     
+      echo "already exists"     
       else
-          echo "create new rule named $name " 
-
+          echo "create new rule" 
           echo "ALERT $name"_overloaded"
           IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes }[30s]))*100 > $cpulimit
           FOR 30s
@@ -202,7 +201,7 @@ write_files:
       if grep -q $alertnametemp servicenames;then 
           echo "need"
       else
-          if [ "$alertnametemp" != "lb" ] && [ "$alertnametemp" != "app" ];then
+          if [ $alertnametemp != "lb" ] && [ $alertnametemp != "app" ];then
           echo "dont need"
           #every app has 2 alerts we need the first alert which starts with the name of the service, then delete 12 lines, 2 rules
           endline=12

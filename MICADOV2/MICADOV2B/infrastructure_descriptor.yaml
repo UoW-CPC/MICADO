@@ -2,13 +2,12 @@ user_id: userid
 infra_name: MICADO
 
 nodes:
-- &Database # Data Avenue database + Consul server
+- &Database # Data Avenue database 
   name: db
   type: db
-- &Prometheus # Prometheus server
-  name: prometheus
-  type: prometheus
-
+- &Central # Central server
+  name: central
+  type: central
 - &APP_cluster # Data Avenue webapplications
   name: app
   type: app
@@ -18,15 +17,14 @@ nodes:
 
 
 
-dependencies: # build order: database -> prometheus -> application nodes -> load balancers
+dependencies: # build order: database -> central -> application nodes
   - connection: [ *APP_cluster, *Database ]
-  - connection: [ *Prometheus, *Database ]
+  - connection: [ *Central, *Database ]
 
 variables:
   occopus_restservice_ip: "127.0.0.1"
   occopus_restservice_port: "5000"
-  applicationport: "8080"
-  consul_host: "prometheus"
+  central_host: "central"
   da_host: "da"
   mysql_root_password: "root"
   mysql_database_name: "dataavenue"
