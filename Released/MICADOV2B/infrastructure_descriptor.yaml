@@ -1,0 +1,33 @@
+user_id: userid
+infra_name: MICADO
+
+nodes:
+- &Database # Data Avenue database 
+  name: db
+  type: db
+- &Central # Central server
+  name: central
+  type: central
+- &APP_cluster # Data Avenue webapplications
+  name: app
+  type: app
+  scaling:
+    min: 1
+    max: 10
+
+
+
+dependencies: # build order: database -> central -> application nodes
+  - connection: [ *APP_cluster, *Database ]
+  - connection: [ *Central, *Database ]
+
+variables:
+  occopus_restservice_ip: "193.224.59.231"
+  occopus_restservice_port: "5000"
+  central_host: "central"
+  da_host: "da"
+  mysql_root_password: "root"
+  mysql_database_name: "dataavenue"
+  mysql_dbuser_username: "da"
+  mysql_dbuser_password: "da"
+  da_webapp_name: "blacktop3"

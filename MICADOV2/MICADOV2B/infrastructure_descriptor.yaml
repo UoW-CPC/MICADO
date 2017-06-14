@@ -22,7 +22,7 @@ dependencies: # build order: database -> central -> application nodes
   - connection: [ *Central, *Database ]
 
 variables:
-  occopus_restservice_ip: "127.0.0.1"
+  occopus_restservice_ip: "193.224.59.231"
   occopus_restservice_port: "5000"
   central_host: "central"
   da_host: "da"

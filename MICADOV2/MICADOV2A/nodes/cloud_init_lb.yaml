@@ -16,7 +16,7 @@ write_files:
     "encrypt": "uohStneoKEoVYZIASGp6Nw==",
     "log_level": "INFO",
     "enable_syslog": false,
-    "retry_join": ["{{getip(variables.consul_host)}}"], 
+    "retry_join": ["{{getip(variables.central_host)}}"], 
     "rejoin_after_leave": true,
     "services": [{"name":"lb_cluster","port":9100}]
     }
@@ -107,16 +107,9 @@ runcmd:
   - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - apt-get update
   - apt-get install -y docker-ce
-  - systemctl enable docker
-  - systemctl enable docker-tcp.socket
-  - systemctl enable docker.socket
-  - systemctl stop docker
-  - systemctl start docker-tcp.socket
   - systemctl start docker
-
-
 # Infra services start
   - sudo docker run -d -p 9100:9100 prom/node-exporter
   - export IP=$(hostname --ip-address)
-  - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.consul_host)}} -config-file=/etc/consul/config.json
-  - sudo docker run -d -p 80:80 -v /etc/htemplate/:/etc/haproxy/ micado/haproxy_consultemplate {{getip(variables.consul_host)}}
+  - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.central_host)}} -config-file=/etc/consul/config.json
+  - sudo docker run -d -p 80:80 -v /etc/htemplate/:/etc/haproxy/ micado/haproxy_consultemplate {{getip(variables.central_host)}}

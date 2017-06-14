@@ -1,0 +1,411 @@
+#cloud-config
+#preserve_hostname: true
+#manage_etc_hosts: false
+
+packages:
+- unzip
+- dnsmasq
+- jq
+
+write_files:
+# consul config
+- content: |
+    {
+    "server": true,
+    "datacenter": "application",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "service": { "name": "prometheus" }
+    }
+  path: /etc/consul/config.json
+
+#alertgenerator on startup
+- content: |
+    [Unit]
+    Description = alert-generator
+    After = docker.service
+
+    [Service]
+    ExecStart = /etc/prometheus/alert_generator.sh
+    Restart=on-failure
+
+    [Install]
+    WantedBy = default.target
+    Alias = alert_generator.service
+
+  path: /etc/systemd/system/alertgenerator.service
+
+# set hostname
+- content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+#------------------
+
+# Prometheus config
+- path: /etc/prometheus/prometheus.yml
+  content: |
+    rule_files:
+    - 'prometheus.rules'
+    scrape_configs:
+    - job_name: cluster_monitoring
+      scrape_interval: 10s
+      consul_sd_configs:
+      - server: '172.31.0.5:8500'
+        datacenter: application
+        services: ['lb_cluster', 'app_cluster', 'app_docker_cluster']
+      relabel_configs:
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'job'
+        replacement:   '$1'
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'group'
+        replacement:   '$1'
+    alerting:
+      alertmanagers:
+      - scheme: http
+        static_configs:
+        - targets:
+          - "172.31.0.3:9093"
+
+# Prometheus rules (expressions and alerts)
+- path: /etc/prometheus/prometheus.rules
+  content: |
+
+    lb_cpu_utilization = 100 - (avg (rate(node_cpu{group="lb_cluster",mode="idle"}[60s])) * 100)
+    app_cpu_utilization = 100 - (avg (rate(node_cpu{group="app_cluster",mode="idle"}[60s])) * 100)
+
+    app_ram_utilization = (sum(node_memory_MemFree{job="app_cluster"}) / sum(node_memory_MemTotal{job="app_cluster"})) * 100
+    lb_ram_utilization = (sum(node_memory_MemFree{job="lb_cluster"}) / sum(node_memory_MemTotal{job="lb_cluster"})) * 100
+
+    lb_hdd_utilization = sum(node_filesystem_free{job="lb_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="lb_cluster",mountpoint="/", device="rootfs"}) *100
+    app_hdd_utilization = sum(node_filesystem_free{job="app_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="app_cluster",mountpoint="/", device="rootfs"}) *100
+
+
+        ALERT lb_overloaded
+          IF lb_cpu_utilization > 60
+          FOR 1m
+          LABELS {alert="overloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "LB cluster overloaded"}
+
+        ALERT lb_underloaded
+          IF lb_cpu_utilization < 20
+          FOR 2m
+          LABELS {alert="underloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "LB cluster underloaded"}
+        
+        ALERT app_overloaded
+          IF app_cpu_utilization > 60
+          FOR 1m
+          LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "Application cluster overloaded"}
+        
+        ALERT app_underloaded
+          IF app_cpu_utilization < 20
+          FOR 2m
+          LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "Application cluster underloaded"}
+
+
+
+
+# alertmanager
+- path: /etc/alertmanager/config.yml
+  content: |
+    global:
+    
+    # The root route on which each incoming alert enters.
+    # The root route with all parameters, which are inherited by the child
+    # routes if they are not overwritten.
+    route:
+      receiver: 'default'
+      group_wait: 10s
+      group_interval: 20s
+      repeat_interval: 40s
+      group_by: [alertname]
+    
+    receivers:
+    - name: 'default'
+      webhook_configs: 
+       - url: http://172.31.0.4:9095
+
+
+# alertgenerator config
+- path: /etc/prometheus/alert_generator.sh
+  content: |
+    #!/bin/bash
+
+    while true
+    do
+
+    #getservices
+    curl -X GET http://0.0.0.0:2375/v1.27/services > getservices.json
+
+    jq '. | length-1' getservices.json > nmbservices
+    jq '.[].Spec.Name' getservices.json | sed 's/.//;s/.$//' > servicenames
+    grep ALERT "/etc/prometheus/prometheus.rules" | sed  's/ALERT\s*//g;s/^ *//;s/_.*//' | awk '!seen[$0]++' > alertnames
+    cat alertnames | wc -l > nmbalerts
+    nmbservices=$(cat nmbservices)
+    for i in $(seq 0 $nmbservices); do
+      echo "${i}" > counter
+      # set the cpu limit from the config, cut get back 0-100 value
+      cpulimit=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.TaskTemplate.Resources.Limits.NanoCPUs' getservices.json | cut -c 1-2)
+      
+      if [ "$cpulimit" = "nu" ]; then
+        cpulimit=95
+      fi
+      ((cpulimit-=10)) # top limit adjust so it can overload
+      name=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.Name' getservices.json | sed 's/.//;s/.$//')
+      namequotes=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.Name' getservices.json)
+
+      #create new rules
+      if [ -n "$name" ]; then
+      if grep -q $name "/etc/prometheus/prometheus.rules"; then
+      echo "already exists"     
+      else
+          echo "create new rule" 
+          echo "ALERT $name"_overloaded"
+          IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes }[30s]))*100 > $cpulimit
+          FOR 30s
+          LABELS {alert="'"overloaded"'", type="'"docker"'", application=$namequotes}
+          ANNOTATIONS {
+          summary = "'"overloaded"'"}
+
+          ALERT $name"_underloaded"
+          IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes }[30s]))*100 < 20
+          FOR 30s
+          LABELS {alert="'"underloaded"'", type="'"docker"'", application=$namequotes}
+          ANNOTATIONS {
+          summary = "'"underloaded"'"}" >> /etc/prometheus/prometheus.rules
+      fi
+      fi
+      done
+
+
+
+    echo "remove olds"
+    # remove old alerts
+    nmbalerts=$(cat nmbalerts)
+    echo "nmb of alerts  $nmbalerts"
+
+    for e in $(seq 1 $nmbalerts); do
+      alertnametemp=$(sed "${e}q;d" alertnames)
+     echo "current  $alertnametemp"
+      if grep -q $alertnametemp servicenames;then 
+          echo "need"
+      else
+          if [ $alertnametemp != "lb" ] && [ $alertnametemp != "app" ];then
+          echo "dont need"
+          #every app has 2 alerts we need the first alert which starts with the name of the service, then delete 12 lines, 2 rules
+          endline=12
+          startline=$(grep -m1 -n "ALERT $alertnametemp" /etc/prometheus/prometheus.rules | awk -F  ":" '{print $1}')
+          ((endline+=startline))
+          sed "$startline,$endline d" /etc/prometheus/prometheus.rules > alerttmp
+          mv alerttmp /etc/prometheus/prometheus.rules
+          fi
+
+      fi
+    done
+    #reload prometheus configuration
+    curl -X POST http://127.0.0.1:9090/-/reload
+    sleep 10
+    done
+
+
+ 
+# executor config
+- path: /etc/prometheus_executor/conf.sh
+  content: |
+        #!/bin/bash
+        
+
+        VM_over_loaded() {
+            curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
+            }
+
+        VM_under_loaded() {
+            curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
+            }
+
+        containerscale() {
+
+            echo "scale $1 by $2"
+            curl -X GET http://hostIP:2375/v1.27/services/$1 > get.json
+            # to pretty json
+            jq '.' get.json > getservice.json
+            # we neet the version for updating later
+            index=$(cat getservice.json | jq '.Version.Index')
+            #  current number of replicas
+            replicas=$(cat getservice.json | jq '.Spec.Mode.Replicated.Replicas')
+            service_cpulimit=$(jq '.Spec.TaskTemplate.Resources.Limits.NanoCPUs' getservice.json | cut -c 1-2)
+            if [ "$service_cpulimit" = "nu" ]; then
+              service_cpulimit=80
+            fi
+            echo " number of replicas before scaling" $replicas
+            # make sure that we don't go bellow 1 container
+            if [ "$replicas" -gt "1" ] || [ $2 -eq "1" ];
+            then
+            cat getservice.json | jq '.Spec.Mode.Replicated.Replicas'+$2 > replicas.json
+            cat getservice.json | jq --slurpfile newvalue replicas.json '.Spec.Mode.Replicated.Replicas = $newvalue[0]' > input.json
+            # save parts of json
+            cat input.json | jq '.Spec' >> spec.json
+            cat input.json | jq '. | del(.ID) | del(.Version) | del(.CreatedAt) | del(.UpdatedAt) | del(.Spec)' > remaining.json
+            # recreate json
+            jq -s '.[0] + .[1]' spec.json remaining.json > output.json
+
+
+            echo "update_service call if possible"
+
+
+            curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle",group="app_cluster"}[1m])' > available_nodes_forscale.json
+            curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle"}[1m])' | jq '. | length' > node_counter
+            num_nodes=$(cat node_counter)
+            ((num_nodes-=1))
+            for i in $(seq 0 $num_nodes); do
+              echo "${i}" > counter
+
+               # if we find at least one node that have enough cpu space than scale up otherwise don't. downscale dosn't matter
+               actual_free_cpu=$(jq -r --slurpfile newvalue counter '.data.result[$newvalue[0]].value[1]' available_nodes_forscale.json | sed 's/^..//'  | cut -c 1-2) 
+             echo "$actual_free_cpu"
+             echo "$service_cpulimit"
+              if [ $actual_free_cpu -gt $service_cpulimit ] || [ $2 -ne "1" ]; then
+              echo "true scale"
+              curl -X POST --header "Content-Type: application/json" http://hostIP:2375/v1.27/services/$1/update?version=$index -d @output.json
+              break
+              else
+              echo "no space"
+              fi
+            done
+
+            fi
+            }
+
+
+        
+        
+        main() {
+          for i in $(seq 1 "$AMX_ALERT_LEN"); do
+            alert="AMX_ALERT_${i}_LABEL_alert"
+            infra="AMX_ALERT_${i}_LABEL_infra_id"
+            node="AMX_ALERT_${i}_LABEL_node"
+            level="AMX_ALERT_${i}_LABEL_type"
+            application="AMX_ALERT_${i}_LABEL_application"
+            alertstatus="AMX_ALERT_${i}_STATUS"
+        
+            if [ "${!level}" = "docker" ] && [ "${!alertstatus}" = "firing" ]
+            then
+                rm input.json getservice.json remaining.json spec.json output.json get.json replicas.json
+        	if [ "${!alert}" = "overloaded" ]
+            then
+            scaleparameter=1
+            containerscale "${!application}" "$scaleparameter"
+        	elif [ "${!alert}" = "underloaded" ]
+            then
+            scaleparameter=-1
+            containerscale "${!application}" "$scaleparameter"
+        	fi
+            fi
+        
+        
+            if [ "${!alert}" = "overloaded" ] && [ "${!level}" = "VM" ] && [ "${!alertstatus}" = "firing" ];
+           		then
+                    VM_over_loaded "${!infra}" "${!node}"
+            fi
+            if [ "${!alert}" = "underloaded" ] && [ "${!level}" = "VM" ] && [ "${!alertstatus}" = "firing" ]; 
+            then
+                    VM_under_loaded "${!infra}" "${!node}"
+            fi
+          done
+          wait
+        }
+        main "$@"
+
+
+
+# Docker API
+- path: /etc/systemd/system/docker-tcp.socket
+  content: |
+   [Unit]
+   Description=Docker Socket for the API
+   [Socket]
+   ListenStream=2375
+   Service=docker.service
+   [Install]
+   WantedBy=sockets.target
+
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+runcmd:
+  - adduser --disabled-password --gecos "" prometheus
+  - /bin/consul-set-network.sh
+  - sudo dhclient
+  - chmod 777 /etc/prometheus_executor/conf.sh
+  - chmod 777 /etc/prometheus/alert_generator.sh
+  - systemctl daemon-reload
+  - systemctl enable alertgenerator
+  - systemctl start alertgenerator
+# Docker install
+  - apt-get update
+  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update
+  - apt-get install -y docker-ce
+  - systemctl enable docker-tcp.socket
+  - systemctl enable docker.socket
+  - systemctl stop docker
+  - systemctl start docker-tcp.socket
+  - systemctl start docker
+# Start Swarm
+  - export IP=$(hostname --ip-address); docker swarm init --advertise-addr=$IP
+  - docker node update --availability drain $(hostname)
+# update executor IP
+  - export IP=$(hostname --ip-address)
+  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh
+#Start infra. services
+  - docker network create -d bridge my-net --subnet 172.31.0.0/24
+  - docker run -d --network=my-net --ip="172.31.0.2" -p 9090:9090 -v /etc/:/etc prom/prometheus
+  - docker run -d --network=my-net --ip="172.31.0.3" -v /etc/alertmanager/:/etc/alertmanager/ -p 9093:9093 prom/alertmanager
+  - docker run -d --network=my-net --ip="172.31.0.4" -p 9095:9095 -v /etc/prometheus_executor/:/etc/prometheus_executor micado/prometheus_executor
+  - export IP=$(hostname --ip-address)
+  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -config-file=/etc/consul/config.json

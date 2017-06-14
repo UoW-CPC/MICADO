@@ -1,0 +1,27 @@
+** 2017-06-07 13:27:02,757	INFO	MainProcess	Starting up; PID = 23464
+** 2017-06-07 13:27:02,757	DEBUG	MainProcess	Initialized InfraProcessor with strategy <occo.infraprocessor.strategy.SequentialStrategy object at 0x7f6f66870a10>
+** 2017-06-07 13:27:02,758	INFO	MainProcess	Start dropping infrastructure a468b1aa-7435-4933-a81d-7d7e2eb65a22
+** 2017-06-07 13:27:02,826	DEBUG	MainProcess	Dropping nodes: ['39862317-bedc-4b4f-a5e9-716f8d1c0be3', '4a8d14c1-cd89-4545-be65-bfed9ed00cb2', 'd3eef75b-6295-46b9-9e4d-0f7213ef7d6c', 'a63d9f03-f9ea-42c1-bf90-07ac6f08e87f']
+** 2017-06-07 13:27:02,877	DEBUG	MainProcess	Pushing instruction list: [<occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e4d0>, <occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e650>, <occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e5d0>, <occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e610>]
+** 2017-06-07 13:27:02,877	DEBUG	MainProcess	Peforming instructions SEQUENTIALLY: [<occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e4d0>, <occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e650>, <occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e5d0>, <occo.plugins.infraprocessor.basic_infraprocessor.DropNode object at 0x7f6f64b0e610>]
+** 2017-06-07 13:27:02,877	INFO	MainProcess	Dropping node 'lb'/'39862317-bedc-4b4f-a5e9-716f8d1c0be3'
+** 2017-06-07 13:27:02,881	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Dropping node '39862317-bedc-4b4f-a5e9-716f8d1c0be3'
+** 2017-06-07 13:27:02,992	DEBUG	MainProcess	Making authentication request to https://sztaki.cloud.mta.hu:5000/v3/auth/tokens
+** 2017-06-07 13:27:04,171	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Done
+** 2017-06-07 13:27:04,181	INFO	MainProcess	Dropping node 'app'/'4a8d14c1-cd89-4545-be65-bfed9ed00cb2'
+** 2017-06-07 13:27:04,188	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Dropping node '4a8d14c1-cd89-4545-be65-bfed9ed00cb2'
+** 2017-06-07 13:27:04,252	DEBUG	MainProcess	Making authentication request to https://sztaki.cloud.mta.hu:5000/v3/auth/tokens
+** 2017-06-07 13:27:05,013	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Done
+** 2017-06-07 13:27:05,031	INFO	MainProcess	Dropping node 'db'/'d3eef75b-6295-46b9-9e4d-0f7213ef7d6c'
+** 2017-06-07 13:27:05,037	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Dropping node 'd3eef75b-6295-46b9-9e4d-0f7213ef7d6c'
+** 2017-06-07 13:27:05,086	DEBUG	MainProcess	Making authentication request to https://sztaki.cloud.mta.hu:5000/v3/auth/tokens
+** 2017-06-07 13:27:05,863	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Done
+** 2017-06-07 13:27:05,871	INFO	MainProcess	Dropping node 'central'/'a63d9f03-f9ea-42c1-bf90-07ac6f08e87f'
+** 2017-06-07 13:27:05,878	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Dropping node 'a63d9f03-f9ea-42c1-bf90-07ac6f08e87f'
+** 2017-06-07 13:27:05,940	DEBUG	MainProcess	Making authentication request to https://sztaki.cloud.mta.hu:5000/v3/auth/tokens
+** 2017-06-07 13:27:06,949	DEBUG	MainProcess	[https://sztaki.cloud.mta.hu:5000/v3] Done
+** 2017-06-07 13:27:06,955	DEBUG	MainProcess	Pushing instruction list: (<occo.plugins.infraprocessor.basic_infraprocessor.DropInfrastructure object at 0x7f6f6682ef50>,)
+** 2017-06-07 13:27:06,955	DEBUG	MainProcess	Peforming instructions SEQUENTIALLY: (<occo.plugins.infraprocessor.basic_infraprocessor.DropInfrastructure object at 0x7f6f6682ef50>,)
+** 2017-06-07 13:27:06,955	DEBUG	MainProcess	Dropping infrastructure 'a468b1aa-7435-4933-a81d-7d7e2eb65a22'
+** 2017-06-07 13:27:06,955	DEBUG	MainProcess	[CM] Destroying environments for infrastructure 'a468b1aa-7435-4933-a81d-7d7e2eb65a22'
+** 2017-06-07 13:27:07,039	INFO	MainProcess	Finished dropping infrastructure a468b1aa-7435-4933-a81d-7d7e2eb65a22

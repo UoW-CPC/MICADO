@@ -1,18 +1,15 @@
 'node_def:db':
   - 
     resource:
-      type: ec2
-      endpoint: replace_with_endpoint_of_ec2_interface_of_your_cloud
-      regionname: replace_with_regionname_of_your_ec2_interface
-      image_id: replace_with_id_of_your_image_on_your_target_cloud
-      instance_type: replace_with_instance_type_of_your_image_on_your_target_cloud
-      key_name: replace_with_key_name_on_your_target_cloud
-      security_group_ids:
-        -
-          replace_with_security_group_id1_on_your_target_cloud
-        -
-          replace_with_security_group_id2_on_your_target_cloud
-      subnet_id: replace_with_subnet_id_on_your_target_cloud
+      type: nova
+      endpoint: https://sztaki.cloud.mta.hu:5000/v3
+      project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+      user_domain_name: Default
+      image_id: d4f4e496-031a-4f49-b034-f8dafe28e01c
+      network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+      flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+      key_name: eniko-test
+      security_groups: [ MICADO ]
     contextualisation:
       type: cloudinit 
       context_template: !yaml_import
@@ -21,18 +18,15 @@
 'node_def:central':
   - 
     resource:
-      type: ec2
-      endpoint: replace_with_endpoint_of_ec2_interface_of_your_cloud
-      regionname: replace_with_regionname_of_your_ec2_interface
-      image_id: replace_with_id_of_your_image_on_your_target_cloud
-      instance_type: replace_with_instance_type_of_your_image_on_your_target_cloud
-      key_name: replace_with_key_name_on_your_target_cloud
-      security_group_ids:
-        -
-          replace_with_security_group_id1_on_your_target_cloud
-        -
-          replace_with_security_group_id2_on_your_target_cloud
-      subnet_id: replace_with_subnet_id_on_your_target_cloud
+      type: nova
+      endpoint: https://sztaki.cloud.mta.hu:5000/v3
+      project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+      user_domain_name: Default
+      image_id: 607df938-3a02-4762-98c1-20891cd34eec
+      network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+      flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+      key_name: eniko-test
+      security_groups: [ MICADO ]
     contextualisation:
       type: cloudinit 
       context_template: !yaml_import
@@ -41,18 +35,15 @@
 'node_def:app':
   -
     resource:
-      type: ec2
-      endpoint: replace_with_endpoint_of_ec2_interface_of_your_cloud
-      regionname: replace_with_regionname_of_your_ec2_interface
-      image_id: replace_with_id_of_your_image_on_your_target_cloud
-      instance_type: replace_with_instance_type_of_your_image_on_your_target_cloud
-      key_name: replace_with_key_name_on_your_target_cloud
-      security_group_ids:
-        -
-          replace_with_security_group_id1_on_your_target_cloud
-        -
-          replace_with_security_group_id2_on_your_target_cloud
-      subnet_id: replace_with_subnet_id_on_your_target_cloud
+      type: nova
+      endpoint: https://sztaki.cloud.mta.hu:5000/v3
+      project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+      user_domain_name: Default
+      image_id: 607df938-3a02-4762-98c1-20891cd34eec
+      network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+      flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+      key_name: eniko-test
+      security_groups: [ MICADO ]
     contextualisation:
       type: cloudinit 
       context_template: !yaml_import

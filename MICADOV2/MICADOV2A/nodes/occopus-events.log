@@ -1,0 +1,10 @@
+** 2017-06-07 13:27:04,181	INFO	MainProcess	a468b1aa-7435-4933-a81d-7d7e2eb65a22 ;; nodedrop ;; 1496842024.180513 ;; {endpoint: https://sztaki.cloud.mta.hu:5000/v3, node_id: 39862317-bedc-4b4f-a5e9-716f8d1c0be3}
+
+** 2017-06-07 13:27:05,031	INFO	MainProcess	a468b1aa-7435-4933-a81d-7d7e2eb65a22 ;; nodedrop ;; 1496842025.030366 ;; {endpoint: https://sztaki.cloud.mta.hu:5000/v3, node_id: 4a8d14c1-cd89-4545-be65-bfed9ed00cb2}
+
+** 2017-06-07 13:27:05,871	INFO	MainProcess	a468b1aa-7435-4933-a81d-7d7e2eb65a22 ;; nodedrop ;; 1496842025.870925 ;; {endpoint: https://sztaki.cloud.mta.hu:5000/v3, node_id: d3eef75b-6295-46b9-9e4d-0f7213ef7d6c}
+
+** 2017-06-07 13:27:06,955	INFO	MainProcess	a468b1aa-7435-4933-a81d-7d7e2eb65a22 ;; nodedrop ;; 1496842026.954456 ;; {endpoint: https://sztaki.cloud.mta.hu:5000/v3, node_id: a63d9f03-f9ea-42c1-bf90-07ac6f08e87f}
+
+** 2017-06-07 13:27:07,039	INFO	MainProcess	a468b1aa-7435-4933-a81d-7d7e2eb65a22 ;; infradrop ;; 1496842027.039441 ;; {}
+

@@ -1,0 +1,550 @@
+** 2017-06-07 13:27:02,877	DEBUG	MainProcess	DropNode:
+- !!python/object:occo.plugins.infraprocessor.basic_infraprocessor.DropNode
+  instance_data:
+    infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+    infra_name: MICADO
+    instance_id: !!python/unicode '316c41e9-9a5c-4141-a9e8-cbe7b8872fb0'
+    node_description:
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      mappings:
+        inbound:
+          app: []
+        outbound: {}
+      name: lb
+      scaling:
+        max: 10
+        min: 1
+      type: lb
+      user_id: userid
+      variables:
+        applicationport: '8080'
+        central_host: central
+        da_host: da
+        da_webapp_name: blacktop3
+        mysql_database_name: dataavenue
+        mysql_dbuser_password: da
+        mysql_dbuser_username: da
+        mysql_root_password: root
+        occopus_restservice_ip: 193.224.59.231
+        occopus_restservice_port: '5000'
+    node_id: 39862317-bedc-4b4f-a5e9-716f8d1c0be3
+    resolved_node_definition:
+      attributes:
+        connections: []
+      context: !!python/unicode "#cloud-config\npackages:\n- unzip\nruncmd:\n- adduser\
+        \ --disabled-password --gecos \"\" prometheus\n- /bin/consul-set-network.sh\n\
+        - sudo dhclient\n- sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048\
+        \ -keyout mykey.key -subj\n  \"/C=HU/ST=HU/L=Budapest/O=SZTAKI LPDS/CN=Data\
+        \ Avenue\" -out mycert.crt\n- cat mycert.crt mykey.key > mypem.pem\n- sudo\
+        \ cp mypem.pem /etc/htemplate/\n- apt-get update\n- apt-get install -y --no-install-recommends\
+        \ apt-transport-https ca-certificates curl\n  software-properties-common wget\n\
+        - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -\n\
+        - add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu\
+        \ $(lsb_release\n  -cs) stable\"\n- apt-get update\n- apt-get install -y docker-ce\n\
+        - systemctl enable docker\n- systemctl enable docker-tcp.socket\n- systemctl\
+        \ enable docker.socket\n- systemctl stop docker\n- systemctl start docker-tcp.socket\n\
+        - systemctl start docker\n- sudo docker run -d -p 9100:9100 prom/node-exporter\n\
+        - export IP=$(hostname --ip-address)\n- sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={\"\
+        leave_on_terminate\":true}'\n  -p 8301:8301 -p 8301:8301/udp -p 8300:8300\
+        \ -p 8302:8302 -p 8302:8302/udp -p 8400:8400\n  -p 8500:8500 -p 8600:8600/udp\
+        \ -v /etc/consul/:/etc/consul   consul agent -advertise=$IP\n  -retry-join=192.168.0.97\
+        \ -config-file=/etc/consul/config.json\n- sudo docker run -d -p 80:80 -v /etc/htemplate/:/etc/haproxy/\
+        \ micado/haproxy_consultemplate\n  192.168.0.97\nwrite_files:\n- content:\
+        \ \"{\\n\\\"server\\\": false,\\n\\\"datacenter\\\": \\\"application\\\",\\\
+        n\\\"data_dir\\\"\\\n    : \\\"/var/consul\\\",\\n\\\"encrypt\\\": \\\"uohStneoKEoVYZIASGp6Nw==\\\
+        \",\\n\\\"log_level\\\"\\\n    : \\\"INFO\\\",\\n\\\"enable_syslog\\\": false,\\\
+        n\\\"retry_join\\\": [\\\"192.168.0.97\\\"\\\n    ], \\n\\\"rejoin_after_leave\\\
+        \": true,\\n\\\"services\\\": [{\\\"name\\\":\\\"lb_cluster\\\",\\\"\\\n \
+        \   port\\\":9100}]\\n}\\n\"\n  path: /etc/consul/config.json\n- content:\
+        \ \"global \\n  maxconn 2048\\n  tune.ssl.default-dh-param 2048\\n  log 127.0.0.1\\\
+        \n    \\ local1 notice\\ndefaults\\n  log global\\n  timeout connect 5000\\\
+        n  timeout client\\\n    \\  36000000\\n  timeout server  36000000\\n  option\
+        \ http-server-close\\nfrontend\\\n    \\ http-frontend\\n  bind *:80\\n  default_backend\
+        \ application\\nfrontend https-frontend\\n\\\n    \\  bind *:443 ssl crt /etc/haproxy/mypem.pem\\\
+        n  reqadd X-Forwarded-Proto:\\\\ https\\n\\\n    \\  default_backend application\\\
+        nbackend application\\n  redirect scheme https if\\\n    \\ !{ ssl_fc }\\\
+        n  balance leastconn {{range service \\\"app_cluster\\\"}}\\n\\\n    \\  server\
+        \ {{.Node}} {{.Address}}:8080{{end}}\\n\"\n  path: /etc/htemplate/template.ctmpl\n\
+        - content: \"#!/bin/sh\\nif [ $reason = \\\"BOUND\\\" ]; then\\n    oldhostname=$(hostname\\\
+        \n    \\ -s)\\n    if [ $oldhostname != $new_host_name ]; then\\n        #\
+        \ Rename Host\\n\\\n    \\        echo $new_host_name > /etc/hostname\\n \
+        \       hostname -F /etc/hostname\\n\\\n    \\        # Update /etc/hosts\
+        \ if needed\\n        TMPHOSTS=/etc/hosts.dhcp.new\\n\\\n    \\        if\
+        \ ! grep \\\"$new_ip_address $new_host_name.$new_domain_name $new_host_name\\\
+        \"\\\n    \\ /etc/hosts; then\\n            # Remove the 127.0.1.1 put there\
+        \ by the debian\\\n    \\ installer\\n            grep -v '127\\\\.0\\\\.1\\\
+        \\.1 ' < /etc/hosts > $TMPHOSTS\\n\\\n    \\            # Add the our new\
+        \ ip address and name\\n            echo \\\"$new_ip_address\\\n    \\ $new_host_name.$new_domain_name\
+        \ $new_host_name\\\" >> $TMPHOSTS\\n            mv\\\n    \\ $TMPHOSTS /etc/hosts\\\
+        n        fi\\n        # Recreate SSH2 keys\\n        export\\\n    \\ DEBIAN_FRONTEND=noninteractive\
+        \ \\n        dpkg-reconfigure openssh-server\\n \\\n    \\   fi\\nfi\\n\"\n\
+        \  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname\n- content: \"#!/bin/bash\\\
+        necho \\\"Setup NETWORK starts.\\\"\\nmyhost=`hostname`\\nipaddress=`ifconfig\\\
+        \n    \\ | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head\
+        \ -n 1`\\ncp\\\n    \\ /etc/hosts /etc/hosts.old\\ngrep -v \\\"$myhost\\\"\
+        \ /etc/hosts.old > /etc/hosts\\n\\\n    \\necho \\\"IPADDRESS: $ipaddress\\\
+        \"\\necho \\\"$ipaddress $myhost\\\" >> /etc/hosts\\n\\n\\\n    rm -rf /etc/resolvconf/*\\\
+        necho \\\"Setup NETWORK finished.\\\"\\n\"\n  path: /bin/consul-set-network.sh\n\
+        \  permissions: '755'"
+      contextualisation:
+        type: cloudinit
+      create_timeout: null
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      name: lb
+      node_id: 39862317-bedc-4b4f-a5e9-716f8d1c0be3
+      resource: &id001
+        endpoint: https://sztaki.cloud.mta.hu:5000/v3
+        flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+        image_id: 607df938-3a02-4762-98c1-20891cd34eec
+        key_name: eniko-test
+        network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+        project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+        security_groups:
+        - ALL
+        type: nova
+        user_domain_name: Default
+      synch_attrs: []
+    resource: *id001
+    user_id: userid
+- !!python/object:occo.plugins.infraprocessor.basic_infraprocessor.DropNode
+  instance_data:
+    infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+    infra_name: MICADO
+    instance_id: !!python/unicode '4f068060-fdf5-40f4-b63f-c46d112f9727'
+    node_description:
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      mappings:
+        inbound:
+          db: []
+        outbound:
+          lb: []
+      name: app
+      scaling:
+        max: 10
+        min: 1
+      type: app
+      user_id: userid
+      variables:
+        applicationport: '8080'
+        central_host: central
+        da_host: da
+        da_webapp_name: blacktop3
+        mysql_database_name: dataavenue
+        mysql_dbuser_password: da
+        mysql_dbuser_username: da
+        mysql_root_password: root
+        occopus_restservice_ip: 193.224.59.231
+        occopus_restservice_port: '5000'
+    node_id: 4a8d14c1-cd89-4545-be65-bfed9ed00cb2
+    resolved_node_definition:
+      attributes:
+        connections: []
+      context: !!python/unicode "#cloud-config\npackages:\n- unzip\nruncmd:\n- adduser\
+        \ --disabled-password --gecos \"\" prometheus\n- /bin/consul-set-network.sh\n\
+        - sudo dhclient\n- apt-get update\n- apt-get install -y --no-install-recommends\
+        \ apt-transport-https ca-certificates curl\n  software-properties-common wget\n\
+        - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -\n\
+        - add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu\
+        \ $(lsb_release\n  -cs) stable\"\n- apt-get update\n- apt-get install -y docker-ce\n\
+        - systemctl enable docker\n- systemctl enable docker-tcp.socket\n- systemctl\
+        \ enable docker.socket\n- systemctl stop docker\n- systemctl start docker-tcp.socket\n\
+        - systemctl start docker\n- wget --retry-connrefused -qO /tmp/swarm_join 192.168.0.97:2375/v1.26/swarm\n\
+        - export TOKEN=$(grep -Eo 'SWMTKN-[[:alnum:]]*-[[:alnum:]]*-[[:alnum:]]*'\
+        \ /tmp/swarm_join\n  | head -1)\n- docker swarm join --token $TOKEN 192.168.0.97:2377\n\
+        - sudo docker run -d -p 9100:9100 prom/node-exporter\n- export IP=$(hostname\
+        \ --ip-address)\n- sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={\"\
+        leave_on_terminate\":true}'\n  -p 8301:8301 -p 8301:8301/udp -p 8300:8300\
+        \ -p 8302:8302 -p 8302:8302/udp -p 8400:8400\n  -p 8500:8500 -p 8600:8600/udp\
+        \ -v /etc/consul/:/etc/consul   consul agent -advertise=$IP\n  -retry-join=192.168.0.97\
+        \ -config-file=/etc/consul/config.json\n- sudo docker run  --volume=/:/rootfs:ro\
+        \  --volume=/var/run:/var/run:rw  --volume=/sys:/sys:ro  --volume=/var/lib/docker/:/var/lib/docker:ro\
+        \  --publish=9200:8080  --detach=true  --name=cadvisor\n  google/cadvisor:latest\n\
+        write_files:\n- content: \"{\\n\\\"server\\\": false,\\n\\\"datacenter\\\"\
+        : \\\"application\\\",\\n\\\"data_dir\\\"\\\n    : \\\"/var/consul\\\",\\\
+        n\\\"encrypt\\\": \\\"uohStneoKEoVYZIASGp6Nw==\\\",\\n\\\"log_level\\\"\\\n\
+        \    : \\\"INFO\\\",\\n\\\"enable_syslog\\\": false,\\n\\\"retry_join\\\"\
+        : [\\\"192.168.0.97\\\"\\\n    ], \\n\\\"rejoin_after_leave\\\": true,\\n\\\
+        \"services\\\": [{\\\"name\\\":\\\"app_cluster\\\",\\\"\\\n    port\\\":9100},\
+        \ {\\\"name\\\":\\\"app_docker_cluster\\\",\\\"port\\\":9200}]\\n}\\n\"\n\
+        \  path: /etc/consul/config.json\n- content: \"#!/bin/sh\\nif [ $reason =\
+        \ \\\"BOUND\\\" ]; then\\n    oldhostname=$(hostname\\\n    \\ -s)\\n    if\
+        \ [ $oldhostname != $new_host_name ]; then\\n        # Rename Host\\n\\\n\
+        \    \\        echo $new_host_name > /etc/hostname\\n        hostname -F /etc/hostname\\\
+        n\\\n    \\        # Update /etc/hosts if needed\\n        TMPHOSTS=/etc/hosts.dhcp.new\\\
+        n\\\n    \\        if ! grep \\\"$new_ip_address $new_host_name.$new_domain_name\
+        \ $new_host_name\\\"\\\n    \\ /etc/hosts; then\\n            # Remove the\
+        \ 127.0.1.1 put there by the debian\\\n    \\ installer\\n            grep\
+        \ -v '127\\\\.0\\\\.1\\\\.1 ' < /etc/hosts > $TMPHOSTS\\n\\\n    \\      \
+        \      # Add the our new ip address and name\\n            echo \\\"$new_ip_address\\\
+        \n    \\ $new_host_name.$new_domain_name $new_host_name\\\" >> $TMPHOSTS\\\
+        n            mv\\\n    \\ $TMPHOSTS /etc/hosts\\n        fi\\n        # Recreate\
+        \ SSH2 keys\\n        export\\\n    \\ DEBIAN_FRONTEND=noninteractive \\n\
+        \        dpkg-reconfigure openssh-server\\n \\\n    \\   fi\\nfi\\n\"\n  path:\
+        \ /etc/dhcp/dhclient-exit-hooks.d/sethostname\n- content: \"#!/bin/bash\\\
+        necho \\\"Setup NETWORK starts.\\\"\\nmyhost=`hostname`\\nipaddress=`ifconfig\\\
+        \n    \\ | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head\
+        \ -n 1`\\ncp\\\n    \\ /etc/hosts /etc/hosts.old\\ngrep -v \\\"$myhost\\\"\
+        \ /etc/hosts.old > /etc/hosts\\n\\\n    \\necho \\\"IPADDRESS: $ipaddress\\\
+        \"\\necho \\\"$ipaddress $myhost\\\" >> /etc/hosts\\n\\n\\\n    rm -rf /etc/resolvconf/*\\\
+        necho \\\"Setup NETWORK finished.\\\"\\n\"\n  path: /bin/consul-set-network.sh\n\
+        \  permissions: '755'"
+      contextualisation:
+        type: cloudinit
+      create_timeout: null
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      name: app
+      node_id: 4a8d14c1-cd89-4545-be65-bfed9ed00cb2
+      resource: &id002
+        endpoint: https://sztaki.cloud.mta.hu:5000/v3
+        flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+        image_id: 607df938-3a02-4762-98c1-20891cd34eec
+        key_name: eniko-test
+        network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+        project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+        security_groups:
+        - ALL
+        type: nova
+        user_domain_name: Default
+      synch_attrs: []
+    resource: *id002
+    user_id: userid
+- !!python/object:occo.plugins.infraprocessor.basic_infraprocessor.DropNode
+  instance_data:
+    infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+    infra_name: MICADO
+    instance_id: !!python/unicode '15af78bc-3427-42fa-a34b-1cb47ad7ef3e'
+    node_description:
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      mappings:
+        inbound: {}
+        outbound:
+          app: []
+          central: []
+      name: db
+      type: db
+      user_id: userid
+      variables:
+        applicationport: '8080'
+        central_host: central
+        da_host: da
+        da_webapp_name: blacktop3
+        mysql_database_name: dataavenue
+        mysql_dbuser_password: da
+        mysql_dbuser_username: da
+        mysql_root_password: root
+        occopus_restservice_ip: 193.224.59.231
+        occopus_restservice_port: '5000'
+    node_id: d3eef75b-6295-46b9-9e4d-0f7213ef7d6c
+    resolved_node_definition:
+      attributes:
+        connections: []
+      context: !!python/unicode "#cloud-config\npackages:\n- mysql-server\n- unzip\n\
+        - dnsmasq\nruncmd:\n- /bin/consul-set-network.sh\n- dhclient\n- mysqladmin\
+        \ -u root password 'root'\n- mysql -u root --password='root' -e \"create database\n\
+        \  dataavenue; create user 'da'@'%'\n  identified by 'da'; grant all privileges\
+        \ on dataavenue.*\n  to 'da'@'%'; flush privileges;\"\n- sed -i 's/127.0.0.1/0.0.0.0/'\
+        \ /etc/mysql/my.cnf\n- service mysql restart\nwrite_files:\n- content: \"\
+        #!/bin/sh\\nif [ $reason = \\\"BOUND\\\" ]; then\\n    oldhostname=$(hostname\\\
+        \n    \\ -s)\\n    if [ $oldhostname != $new_host_name ]; then\\n        #\
+        \ Rename Host\\n\\\n    \\        echo $new_host_name > /etc/hostname\\n \
+        \       hostname -F /etc/hostname\\n\\\n    \\        # Update /etc/hosts\
+        \ if needed\\n        TMPHOSTS=/etc/hosts.dhcp.new\\n\\\n    \\        if\
+        \ ! grep \\\"$new_ip_address $new_host_name.$new_domain_name $new_host_name\\\
+        \"\\\n    \\ /etc/hosts; then\\n            # Remove the 127.0.1.1 put there\
+        \ by the debian\\\n    \\ installer\\n            grep -v '127\\\\.0\\\\.1\\\
+        \\.1 ' < /etc/hosts > $TMPHOSTS\\n\\\n    \\            # Add the our new\
+        \ ip address and name\\n            echo \\\"$new_ip_address\\\n    \\ $new_host_name.$new_domain_name\
+        \ $new_host_name\\\" >> $TMPHOSTS\\n            mv\\\n    \\ $TMPHOSTS /etc/hosts\\\
+        n        fi\\n        # Recreate SSH2 keys\\n        export\\\n    \\ DEBIAN_FRONTEND=noninteractive\
+        \ \\n        dpkg-reconfigure openssh-server\\n \\\n    \\   fi\\nfi\\n\"\n\
+        \  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname\n- content: \"#!/bin/bash\\\
+        necho \\\"Setup NETWORK starts.\\\"\\nmyhost=`hostname`\\nipaddress=`ifconfig\\\
+        \n    \\ | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head\
+        \ -n 1`\\ncp\\\n    \\ /etc/hosts /etc/hosts.old\\ngrep -v \\\"$myhost\\\"\
+        \ /etc/hosts.old > /etc/hosts\\n\\\n    \\necho \\\"IPADDRESS: $ipaddress\\\
+        \"\\necho \\\"$ipaddress $myhost\\\" >> /etc/hosts\\n\\n\\\n    rm -rf /etc/resolvconf/*\\\
+        necho \\\"Setup NETWORK finished.\\\"\\n\"\n  path: /bin/consul-set-network.sh\n\
+        \  permissions: '755'"
+      contextualisation:
+        type: cloudinit
+      create_timeout: null
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      name: db
+      node_id: d3eef75b-6295-46b9-9e4d-0f7213ef7d6c
+      resource: &id003
+        endpoint: https://sztaki.cloud.mta.hu:5000/v3
+        flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+        image_id: d4f4e496-031a-4f49-b034-f8dafe28e01c
+        key_name: eniko-test
+        network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+        project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+        security_groups:
+        - ALL
+        type: nova
+        user_domain_name: Default
+      synch_attrs: []
+    resource: *id003
+    user_id: userid
+- !!python/object:occo.plugins.infraprocessor.basic_infraprocessor.DropNode
+  instance_data:
+    infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+    infra_name: MICADO
+    instance_id: !!python/unicode '64f07de2-d6b7-475b-b86f-9b4e5a07e8b5'
+    node_description:
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      mappings:
+        inbound:
+          db: []
+        outbound: {}
+      name: central
+      type: central
+      user_id: userid
+      variables:
+        applicationport: '8080'
+        central_host: central
+        da_host: da
+        da_webapp_name: blacktop3
+        mysql_database_name: dataavenue
+        mysql_dbuser_password: da
+        mysql_dbuser_username: da
+        mysql_root_password: root
+        occopus_restservice_ip: 193.224.59.231
+        occopus_restservice_port: '5000'
+    node_id: a63d9f03-f9ea-42c1-bf90-07ac6f08e87f
+    resolved_node_definition:
+      attributes:
+        connections: []
+      context: !!python/unicode "#cloud-config\npackages:\n- unzip\n- dnsmasq\n- jq\n\
+        runcmd:\n- adduser --disabled-password --gecos \"\" prometheus\n- /bin/consul-set-network.sh\n\
+        - sudo dhclient\n- chmod 777 /etc/prometheus_executor/conf.sh\n- chmod 777\
+        \ /etc/prometheus/alert_generator.sh\n- systemctl daemon-reload\n- systemctl\
+        \ enable alertgenerator\n- systemctl start alertgenerator\n- apt-get update\n\
+        - apt-get install -y --no-install-recommends apt-transport-https ca-certificates\
+        \ curl\n  software-properties-common wget\n- curl -fsSL https://download.docker.com/linux/ubuntu/gpg\
+        \ | apt-key add -\n- add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu\
+        \ $(lsb_release\n  -cs) stable\"\n- apt-get update\n- apt-get install -y docker-ce\n\
+        - systemctl enable docker-tcp.socket\n- systemctl enable docker.socket\n-\
+        \ systemctl stop docker\n- systemctl start docker-tcp.socket\n- systemctl\
+        \ start docker\n- export IP=$(hostname --ip-address); docker swarm init --advertise-addr=$IP\n\
+        - docker node update --availability drain $(hostname)\n- export IP=$(hostname\
+        \ --ip-address)\n- sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh\n\
+        - docker network create -d bridge my-net --subnet 172.31.0.0/24\n- docker\
+        \ run -d --network=my-net --ip=\"172.31.0.2\" -p 9090:9090 -v /etc/:/etc prom/prometheus\n\
+        - docker run -d --network=my-net --ip=\"172.31.0.3\" -v /etc/alertmanager/:/etc/alertmanager/\n\
+        \  -p 9093:9093 prom/alertmanager\n- docker run -d --network=my-net --ip=\"\
+        172.31.0.4\" -p 9095:9095 -v /etc/prometheus_executor/:/etc/prometheus_executor\n\
+        \  micado/prometheus_executor\n- export IP=$(hostname --ip-address)\n- docker\
+        \ run -d --network=my-net --ip=\"172.31.0.5\" -p 8301:8301 -p 8301:8301/udp\
+        \ -p\n  8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500\
+        \ -p 8600:8600/udp  -v\n  /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={\"\
+        skip_leave_on_interrupt\":true}'  consul\n  agent -server -client=0.0.0.0\
+        \ -advertise=$IP -bootstrap=true -config-file=/etc/consul/config.json\nwrite_files:\n\
+        - content: \"{\\n\\\"server\\\": true,\\n\\\"datacenter\\\": \\\"application\\\
+        \",\\n\\\"encrypt\\\": \\\"\\\n    uohStneoKEoVYZIASGp6Nw==\\\",\\n\\\"log_level\\\
+        \": \\\"INFO\\\",\\n\\\"enable_syslog\\\": false,\\n\\\n    \\\"service\\\"\
+        : { \\\"name\\\": \\\"prometheus\\\" }\\n}\\n\"\n  path: /etc/consul/config.json\n\
+        - content: \"[Unit]\\nDescription = alert-generator\\nAfter = docker.service\\\
+        n\\n[Service]\\n\\\n    ExecStart = /etc/prometheus/alert_generator.sh\\nRestart=on-failure\\\
+        n\\n[Install]\\n\\\n    WantedBy = default.target\\nAlias = alert_generator.service\\\
+        n\"\n  path: /etc/systemd/system/alertgenerator.service\n- content: \"#!/bin/sh\\\
+        nif [ $reason = \\\"BOUND\\\" ]; then\\n    oldhostname=$(hostname\\\n   \
+        \ \\ -s)\\n    if [ $oldhostname != $new_host_name ]; then\\n        # Rename\
+        \ Host\\n\\\n    \\        echo $new_host_name > /etc/hostname\\n        hostname\
+        \ -F /etc/hostname\\n\\\n    \\        # Update /etc/hosts if needed\\n  \
+        \      TMPHOSTS=/etc/hosts.dhcp.new\\n\\\n    \\        if ! grep \\\"$new_ip_address\
+        \ $new_host_name.$new_domain_name $new_host_name\\\"\\\n    \\ /etc/hosts;\
+        \ then\\n            # Remove the 127.0.1.1 put there by the debian\\\n  \
+        \  \\ installer\\n            grep -v '127\\\\.0\\\\.1\\\\.1 ' < /etc/hosts\
+        \ > $TMPHOSTS\\n\\\n    \\            # Add the our new ip address and name\\\
+        n            echo \\\"$new_ip_address\\\n    \\ $new_host_name.$new_domain_name\
+        \ $new_host_name\\\" >> $TMPHOSTS\\n            mv\\\n    \\ $TMPHOSTS /etc/hosts\\\
+        n        fi\\n        # Recreate SSH2 keys\\n        export\\\n    \\ DEBIAN_FRONTEND=noninteractive\
+        \ \\n        dpkg-reconfigure openssh-server\\n \\\n    \\   fi\\nfi\\n\"\n\
+        \  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname\n- content: \"rule_files:\\\
+        n- 'prometheus.rules'\\nscrape_configs:\\n- job_name: cluster_monitoring\\\
+        n\\\n    \\  scrape_interval: 10s\\n  consul_sd_configs:\\n  - server: '172.31.0.5:8500'\\\
+        n\\\n    \\    datacenter: application\\n    services: ['lb_cluster', 'app_cluster',\
+        \ 'app_docker_cluster']\\n\\\n    \\  relabel_configs:\\n  - source_labels:\
+        \ ['__meta_consul_service']\\n    regex:\\\n    \\         '(.*)'\\n    target_label:\
+        \  'job'\\n    replacement:   '$1'\\n  - source_labels:\\\n    \\ ['__meta_consul_service']\\\
+        n    regex:         '(.*)'\\n    target_label:  'group'\\n\\\n    \\    replacement:\
+        \   '$1'\\nalerting:\\n  alertmanagers:\\n  - scheme: http\\n    static_configs:\\\
+        n\\\n    \\    - targets:\\n      - \\\"172.31.0.3:9093\\\"\\n\"\n  path:\
+        \ /etc/prometheus/prometheus.yml\n- content: \"\\nlb_cpu_utilization = 100\
+        \ - (avg (rate(node_cpu{group=\\\"lb_cluster\\\"\\\n    ,mode=\\\"idle\\\"\
+        }[60s])) * 100)\\napp_cpu_utilization = 100 - (avg (rate(node_cpu{group=\\\
+        \"\\\n    app_cluster\\\",mode=\\\"idle\\\"}[60s])) * 100)\\n\\napp_ram_utilization\
+        \ = (sum(node_memory_MemFree{job=\\\"\\\n    app_cluster\\\"}) / sum(node_memory_MemTotal{job=\\\
+        \"app_cluster\\\"})) * 100\\nlb_ram_utilization\\\n    \\ = (sum(node_memory_MemFree{job=\\\
+        \"lb_cluster\\\"}) / sum(node_memory_MemTotal{job=\\\"\\\n    lb_cluster\\\
+        \"})) * 100\\n\\nlb_hdd_utilization = sum(node_filesystem_free{job=\\\"\\\n\
+        \    lb_cluster\\\",mountpoint=\\\"/\\\", device=\\\"rootfs\\\"}) / sum(node_filesystem_size{job=\\\
+        \"\\\n    lb_cluster\\\",mountpoint=\\\"/\\\", device=\\\"rootfs\\\"}) *100\\\
+        napp_hdd_utilization =\\\n    \\ sum(node_filesystem_free{job=\\\"app_cluster\\\
+        \",mountpoint=\\\"/\\\", device=\\\"rootfs\\\"\\\n    }) / sum(node_filesystem_size{job=\\\
+        \"app_cluster\\\",mountpoint=\\\"/\\\", device=\\\"\\\n    rootfs\\\"}) *100\\\
+        n\\n\\n    ALERT lb_overloaded\\n      IF lb_cpu_utilization > 60\\n\\\n \
+        \   \\      FOR 1m\\n      LABELS {alert=\\\"overloaded\\\", cluster=\\\"\
+        lb_cluster\\\", node=\\\"\\\n    lb\\\", infra_id=\\\"a468b1aa-7435-4933-a81d-7d7e2eb65a22\\\
+        \", type=\\\"VM\\\"}\\n      ANNOTATIONS {\\n      summary\\\n    \\ = \\\"\
+        LB cluster overloaded\\\"}\\n\\n    ALERT lb_underloaded\\n      IF lb_cpu_utilization\\\
+        \n    \\ < 20\\n      FOR 2m\\n      LABELS {alert=\\\"underloaded\\\", cluster=\\\
+        \"lb_cluster\\\"\\\n    , node=\\\"lb\\\", infra_id=\\\"a468b1aa-7435-4933-a81d-7d7e2eb65a22\\\
+        \", type=\\\"VM\\\"}\\n      ANNOTATIONS {\\n\\\n    \\      summary = \\\"\
+        LB cluster underloaded\\\"}\\n    \\n    ALERT app_overloaded\\n\\\n    \\\
+        \      IF app_cpu_utilization > 60\\n      FOR 1m\\n      LABELS {alert=\\\
+        \"overloaded\\\"\\\n    , cluster=\\\"app_cluster\\\", node=\\\"app\\\", infra_id=\\\
+        \"a468b1aa-7435-4933-a81d-7d7e2eb65a22\\\", type=\\\"VM\\\"\\\n    }\\n  \
+        \    ANNOTATIONS {\\n      summary = \\\"Application cluster overloaded\\\"\
+        }\\n\\\n    \\    \\n    ALERT app_underloaded\\n      IF app_cpu_utilization\
+        \ < 20\\n      FOR\\\n    \\ 2m\\n      LABELS {alert=\\\"underloaded\\\"\
+        , cluster=\\\"app_cluster\\\", node=\\\"app\\\"\\\n    , infra_id=\\\"a468b1aa-7435-4933-a81d-7d7e2eb65a22\\\
+        \", type=\\\"VM\\\"}\\n      ANNOTATIONS {\\n      summary\\\n    \\ = \\\"\
+        Application cluster underloaded\\\"}\\n\"\n  path: /etc/prometheus/prometheus.rules\n\
+        - content: \"global:\\n\\n# The root route on which each incoming alert enters.\\\
+        n# The\\\n    \\ root route with all parameters, which are inherited by the\
+        \ child\\n# routes if\\\n    \\ they are not overwritten.\\nroute:\\n  receiver:\
+        \ 'default'\\n  group_wait: 10s\\n\\\n    \\  group_interval: 20s\\n  repeat_interval:\
+        \ 40s\\n  group_by: [alertname]\\n\\nreceivers:\\n\\\n    - name: 'default'\\\
+        n  webhook_configs: \\n   - url: http://172.31.0.4:9095\\n\"\n  path: /etc/alertmanager/config.yml\n\
+        - content: \"#!/bin/bash\\n\\nwhile true\\ndo\\n\\n#getservices\\ncurl -X\
+        \ GET http://0.0.0.0:2375/v1.27/services\\\n    \\ > getservices.json\\n\\\
+        njq '. | length-1' getservices.json > nmbservices\\njq '.[].Spec.Name'\\\n\
+        \    \\ getservices.json | sed 's/.//;s/.$//' > servicenames\\ngrep ALERT\
+        \ \\\"/etc/prometheus/prometheus.rules\\\"\\\n    \\ | sed  's/ALERT\\\\s*//g;s/^\
+        \ *//;s/_.*//' | awk '!seen[$0]++' > alertnames\\ncat\\\n    \\ alertnames\
+        \ | wc -l > nmbalerts\\nnmbservices=$(cat nmbservices)\\nfor i in $(seq\\\n\
+        \    \\ 0 $nmbservices); do\\n  echo \\\"${i}\\\" > counter\\n  # set the\
+        \ cpu limit from the\\\n    \\ config, cut get back 0-100 value\\n  cpulimit=$(jq\
+        \ --slurpfile newvalue counter\\\n    \\ '.[$newvalue[0]].Spec.TaskTemplate.Resources.Limits.NanoCPUs'\
+        \ getservices.json\\\n    \\ | cut -c 1-2)\\n  \\n  if [ \\\"$cpulimit\\\"\
+        \ = \\\"nu\\\" ]; then\\n    cpulimit=95\\n\\\n    \\  fi\\n  ((cpulimit-=10))\
+        \ # top limit adjust so it can overload\\n  name=$(jq --slurpfile\\\n    \\\
+        \ newvalue counter '.[$newvalue[0]].Spec.Name' getservices.json | sed 's/.//;s/.$//')\\\
+        n\\\n    \\  namequotes=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.Name'\
+        \ getservices.json)\\n\\\n    \\n  #create new rules\\n  if [ -n \\\"$name\\\
+        \" ]; then\\n  if grep -q $name \\\"/etc/prometheus/prometheus.rules\\\"\\\
+        \n    ; then\\n  echo \\\"already exists\\\"     \\n  else\\n      echo \\\
+        \"create new rule\\\"\\\n    \\ \\n      echo \\\"ALERT $name\\\"_overloaded\\\
+        \"\\n      IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes\\\
+        \n    \\ }[30s]))*100 > $cpulimit\\n      FOR 30s\\n      LABELS {alert=\\\
+        \"'\\\"overloaded\\\"\\\n    '\\\", type=\\\"'\\\"docker\\\"'\\\", application=$namequotes}\\\
+        n      ANNOTATIONS {\\n  \\\n    \\    summary = \\\"'\\\"overloaded\\\"'\\\
+        \"}\\n\\n      ALERT $name\\\"_underloaded\\\"\\n  \\\n    \\    IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes\\\
+        \n    \\ }[30s]))*100 < 20\\n      FOR 30s\\n      LABELS {alert=\\\"'\\\"\
+        underloaded\\\"'\\\"\\\n    , type=\\\"'\\\"docker\\\"'\\\", application=$namequotes}\\\
+        n      ANNOTATIONS {\\n     \\\n    \\ summary = \\\"'\\\"underloaded\\\"\
+        '\\\"}\\\" >> /etc/prometheus/prometheus.rules\\n  fi\\n\\\n    \\  fi\\n\
+        \  done\\n\\n\\n\\necho \\\"remove olds\\\"\\n# remove old alerts\\nnmbalerts=$(cat\\\
+        \n    \\ nmbalerts)\\necho \\\"nmb of alerts  $nmbalerts\\\"\\n\\nfor e in\
+        \ $(seq 1 $nmbalerts);\\\n    \\ do\\n  alertnametemp=$(sed \\\"${e}q;d\\\"\
+        \ alertnames)\\n echo \\\"current  $alertnametemp\\\"\\\n    \\n  if grep\
+        \ -q $alertnametemp servicenames;then \\n      echo \\\"need\\\"\\n  else\\\
+        n\\\n    \\      if [ $alertnametemp != \\\"lb\\\" ] && [ $alertnametemp !=\
+        \ \\\"app\\\" ];then\\n\\\n    \\      echo \\\"dont need\\\"\\n      #every\
+        \ app has 2 alerts we need the first alert\\\n    \\ which starts with the\
+        \ name of the service, then delete 12 lines, 2 rules\\n \\\n    \\     endline=12\\\
+        n      startline=$(grep -m1 -n \\\"ALERT $alertnametemp\\\" /etc/prometheus/prometheus.rules\\\
+        \n    \\ | awk -F  \\\":\\\" '{print $1}')\\n      ((endline+=startline))\\\
+        n      sed \\\"$startline,$endline\\\n    \\ d\\\" /etc/prometheus/prometheus.rules\
+        \ > alerttmp\\n      mv alerttmp /etc/prometheus/prometheus.rules\\n\\\n \
+        \   \\      fi\\n\\n  fi\\ndone\\n#reload prometheus configuration\\ncurl\
+        \ -X POST http://127.0.0.1:9090/-/reload\\n\\\n    sleep 10\\ndone\\n\"\n\
+        \  path: /etc/prometheus/alert_generator.sh\n- content: \"#!/bin/bash\\n\\\
+        n\\nVM_over_loaded() {\\n    curl -X POST http://193.224.59.231:5000/infrastructures/$1/scaleup/$2\\\
+        n\\\n    \\    }\\n\\nVM_under_loaded() {\\n    curl -X POST http://193.224.59.231:5000/infrastructures/$1/scaledown/$2\\\
+        n\\\n    \\    }\\n\\ncontainerscale() {\\n\\n    echo \\\"scale $1 by $2\\\
+        \"\\n    curl -X GET http://hostIP:2375/v1.27/services/$1\\\n    \\ > get.json\\\
+        n    # to pretty json\\n    jq '.' get.json > getservice.json\\n  \\\n   \
+        \ \\  # we neet the version for updating later\\n    index=$(cat getservice.json\
+        \ |\\\n    \\ jq '.Version.Index')\\n    #  current number of replicas\\n\
+        \    replicas=$(cat\\\n    \\ getservice.json | jq '.Spec.Mode.Replicated.Replicas')\\\
+        n    service_cpulimit=$(jq\\\n    \\ '.Spec.TaskTemplate.Resources.Limits.NanoCPUs'\
+        \ getservice.json | cut -c 1-2)\\n\\\n    \\    if [ \\\"$service_cpulimit\\\
+        \" = \\\"nu\\\" ]; then\\n      service_cpulimit=80\\n\\\n    \\    fi\\n\
+        \    echo \\\" number of replicas before scaling\\\" $replicas\\n    # make\\\
+        \n    \\ sure that we don't go bellow 1 container\\n    if [ \\\"$replicas\\\
+        \" -gt \\\"1\\\" ]\\\n    \\ || [ $2 -eq \\\"1\\\" ];\\n    then\\n    cat\
+        \ getservice.json | jq '.Spec.Mode.Replicated.Replicas'+$2\\\n    \\ > replicas.json\\\
+        n    cat getservice.json | jq --slurpfile newvalue replicas.json\\\n    \\\
+        \ '.Spec.Mode.Replicated.Replicas = $newvalue[0]' > input.json\\n    # save\
+        \ parts\\\n    \\ of json\\n    cat input.json | jq '.Spec' >> spec.json\\\
+        n    cat input.json |\\\n    \\ jq '. | del(.ID) | del(.Version) | del(.CreatedAt)\
+        \ | del(.UpdatedAt) | del(.Spec)'\\\n    \\ > remaining.json\\n    # recreate\
+        \ json\\n    jq -s '.[0] + .[1]' spec.json remaining.json\\\n    \\ > output.json\\\
+        n\\n\\n    echo \\\"update_service call if possible\\\"\\n\\n\\n    curl\\\
+        \n    \\ -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode=\\\"\
+        idle\\\",group=\\\"\\\n    app_cluster\\\"}[1m])' > available_nodes_forscale.json\\\
+        n    curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode=\\\"\
+        \\\n    idle\\\"}[1m])' | jq '. | length' > node_counter\\n    num_nodes=$(cat\
+        \ node_counter)\\n\\\n    \\    ((num_nodes-=1))\\n    for i in $(seq 0 $num_nodes);\
+        \ do\\n      echo \\\"${i}\\\"\\\n    \\ > counter\\n\\n       # if we find\
+        \ at least one node that have enough cpu space\\\n    \\ than scale up otherwise\
+        \ don't. downscale dosn't matter\\n       actual_free_cpu=$(jq\\\n    \\ -r\
+        \ --slurpfile newvalue counter '.data.result[$newvalue[0]].value[1]' available_nodes_forscale.json\\\
+        \n    \\ | sed 's/^..//'  | cut -c 1-2) \\n     echo \\\"$actual_free_cpu\\\
+        \"\\n     echo \\\"\\\n    $service_cpulimit\\\"\\n      if [ $actual_free_cpu\
+        \ -gt $service_cpulimit ] || [\\\n    \\ $2 -ne \\\"1\\\" ]; then\\n     \
+        \ echo \\\"true scale\\\"\\n      curl -X POST --header\\\n    \\ \\\"Content-Type:\
+        \ application/json\\\" http://hostIP:2375/v1.27/services/$1/update?version=$index\\\
+        \n    \\ -d @output.json\\n      break\\n      else\\n      echo \\\"no space\\\
+        \"\\n      fi\\n\\\n    \\    done\\n\\n    fi\\n    }\\n\\n\\n\\n\\nmain()\
+        \ {\\n  for i in $(seq 1 \\\"$AMX_ALERT_LEN\\\"\\\n    ); do\\n    alert=\\\
+        \"AMX_ALERT_${i}_LABEL_alert\\\"\\n    infra=\\\"AMX_ALERT_${i}_LABEL_infra_id\\\
+        \"\\\n    \\n    node=\\\"AMX_ALERT_${i}_LABEL_node\\\"\\n    level=\\\"AMX_ALERT_${i}_LABEL_type\\\
+        \"\\\n    \\n    application=\\\"AMX_ALERT_${i}_LABEL_application\\\"\\n \
+        \   alertstatus=\\\"AMX_ALERT_${i}_STATUS\\\"\\\n    \\n\\n    if [ \\\"${!level}\\\
+        \" = \\\"docker\\\" ] && [ \\\"${!alertstatus}\\\" = \\\"firing\\\"\\\n  \
+        \  \\ ]\\n    then\\n        rm input.json getservice.json remaining.json\
+        \ spec.json\\\n    \\ output.json get.json replicas.json\\n\\tif [ \\\"${!alert}\\\
+        \" = \\\"overloaded\\\" ]\\n\\\n    \\    then\\n    scaleparameter=1\\n \
+        \   containerscale \\\"${!application}\\\" \\\"$scaleparameter\\\"\\\n   \
+        \ \\n\\telif [ \\\"${!alert}\\\" = \\\"underloaded\\\" ]\\n    then\\n   \
+        \ scaleparameter=-1\\n\\\n    \\    containerscale \\\"${!application}\\\"\
+        \ \\\"$scaleparameter\\\"\\n\\tfi\\n    fi\\n\\n\\n\\\n    \\    if [ \\\"\
+        ${!alert}\\\" = \\\"overloaded\\\" ] && [ \\\"${!level}\\\" = \\\"VM\\\" ]\
+        \ && [\\\n    \\ \\\"${!alertstatus}\\\" = \\\"firing\\\" ];\\n   \\t\\tthen\\\
+        n            VM_over_loaded\\\n    \\ \\\"${!infra}\\\" \\\"${!node}\\\"\\\
+        n    fi\\n    if [ \\\"${!alert}\\\" = \\\"underloaded\\\"\\\n    \\ ] &&\
+        \ [ \\\"${!level}\\\" = \\\"VM\\\" ] && [ \\\"${!alertstatus}\\\" = \\\"firing\\\
+        \" ]; \\n\\\n    \\    then\\n            VM_under_loaded \\\"${!infra}\\\"\
+        \ \\\"${!node}\\\"\\n    fi\\n  done\\n\\\n    \\  wait\\n}\\nmain \\\"$@\\\
+        \"\\n\"\n  path: /etc/prometheus_executor/conf.sh\n- content: \"[Unit]\\nDescription=Docker\
+        \ Socket for the API\\n[Socket]\\nListenStream=2375\\n\\\n    Service=docker.service\\\
+        n[Install]\\nWantedBy=sockets.target\\n\"\n  path: /etc/systemd/system/docker-tcp.socket\n\
+        - content: \"#!/bin/bash\\necho \\\"Setup NETWORK starts.\\\"\\nmyhost=`hostname`\\\
+        nipaddress=`ifconfig\\\n    \\ | awk '/inet addr/{print substr($2,6)}' | grep\
+        \ -v 127.0.0.1 | head -n 1`\\ncp\\\n    \\ /etc/hosts /etc/hosts.old\\ngrep\
+        \ -v \\\"$myhost\\\" /etc/hosts.old > /etc/hosts\\n\\\n    \\necho \\\"IPADDRESS:\
+        \ $ipaddress\\\"\\necho \\\"$ipaddress $myhost\\\" >> /etc/hosts\\n\\n\\\n\
+        \    rm -rf /etc/resolvconf/*\\necho \\\"Setup NETWORK finished.\\\"\\n\"\n\
+        \  path: /bin/consul-set-network.sh\n  permissions: '755'"
+      contextualisation:
+        type: cloudinit
+      create_timeout: null
+      infra_id: a468b1aa-7435-4933-a81d-7d7e2eb65a22
+      infra_name: MICADO
+      name: central
+      node_id: a63d9f03-f9ea-42c1-bf90-07ac6f08e87f
+      resource: &id004
+        endpoint: https://sztaki.cloud.mta.hu:5000/v3
+        flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
+        image_id: 607df938-3a02-4762-98c1-20891cd34eec
+        key_name: eniko-test
+        network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
+        project_id: a678d20e71cb4b9f812a31e5f3eb63b0
+        security_groups:
+        - ALL
+        type: nova
+        user_domain_name: Default
+      synch_attrs: []
+    resource: *id004
+    user_id: userid
+

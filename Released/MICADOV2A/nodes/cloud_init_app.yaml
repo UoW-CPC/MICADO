@@ -1,0 +1,93 @@
+#cloud-config
+#preserve_hostname: true
+#manage_etc_hosts: false
+
+packages:
+  - unzip
+
+
+write_files:
+
+- content: |
+    {
+    "server": false,
+    "datacenter": "application",
+    "data_dir": "/var/consul",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "retry_join": ["{{getip(variables.central_host)}}"], 
+    "rejoin_after_leave": true,
+    "services": [{"name":"app_cluster","port":9100}, {"name":"app_docker_cluster","port":9200}]
+    }
+  path: /etc/consul/config.json
+
+
+# set hostname
+- content: |
+    #!/bin/sh
+    if [ $reason = "BOUND" ]; then
+        oldhostname=$(hostname -s)
+        if [ $oldhostname != $new_host_name ]; then
+            # Rename Host
+            echo $new_host_name > /etc/hostname
+            hostname -F /etc/hostname
+            # Update /etc/hosts if needed
+            TMPHOSTS=/etc/hosts.dhcp.new
+            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+                # Remove the 127.0.1.1 put there by the debian installer
+                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+                # Add the our new ip address and name
+                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+                mv $TMPHOSTS /etc/hosts
+            fi
+            # Recreate SSH2 keys
+            export DEBIAN_FRONTEND=noninteractive 
+            dpkg-reconfigure openssh-server
+        fi
+    fi
+  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+runcmd:
+  - adduser --disabled-password --gecos "" prometheus
+  - /bin/consul-set-network.sh
+# host: ubuntu
+  - sudo dhclient
+# Docker
+  - apt-get update
+  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update
+  - apt-get install -y docker-ce
+  - systemctl start docker
+# Connect to Swarm
+  - wget --retry-connrefused -qO /tmp/swarm_join {{getip(variables.central_host)}}:2375/v1.26/swarm
+  - export TOKEN=$(grep -Eo 'SWMTKN-[[:alnum:]]*-[[:alnum:]]*-[[:alnum:]]*' /tmp/swarm_join | head -1)
+  - docker swarm join --token $TOKEN {{getip(variables.central_host)}}:2377
+
+# Infra services start
+  - sudo docker run -d -p 9100:9100 prom/node-exporter
+  - export IP=$(hostname --ip-address)
+  - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.central_host)}} -config-file=/etc/consul/config.json 
+  - sudo docker run  --volume=/:/rootfs:ro  --volume=/var/run:/var/run:rw  --volume=/sys:/sys:ro  --volume=/var/lib/docker/:/var/lib/docker:ro  --publish=9200:8080  --detach=true  --name=cadvisor google/cadvisor:latest
+
+# Start application service
+# Log into the Prometheus node where Swarm is running and start your application service
+# docker service create --name avenue --mode global --publish 80:8080 -e IP='sqldb ip' -p 8080:8080 rabotond/avenue
