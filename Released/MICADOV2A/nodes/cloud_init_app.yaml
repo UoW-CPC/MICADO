@@ -5,7 +5,6 @@
 packages:
   - unzip
 
-
 write_files:
 
 - content: |
@@ -76,6 +75,11 @@ runcmd:
   - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - apt-get update
   - apt-get install -y docker-ce
+  - systemctl enable docker
+  - systemctl enable docker-tcp.socket
+  - systemctl enable docker.socket
+  - systemctl stop docker
+  - systemctl start docker-tcp.socket
   - systemctl start docker
 # Connect to Swarm
   - wget --retry-connrefused -qO /tmp/swarm_join {{getip(variables.central_host)}}:2375/v1.26/swarm

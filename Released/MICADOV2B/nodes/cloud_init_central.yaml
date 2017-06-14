@@ -94,9 +94,29 @@ write_files:
 - path: /etc/prometheus/prometheus.rules
   content: |
 
+    lb_cpu_utilization = 100 - (avg (rate(node_cpu{group="lb_cluster",mode="idle"}[60s])) * 100)
     app_cpu_utilization = 100 - (avg (rate(node_cpu{group="app_cluster",mode="idle"}[60s])) * 100)
+
     app_ram_utilization = (sum(node_memory_MemFree{job="app_cluster"}) / sum(node_memory_MemTotal{job="app_cluster"})) * 100
+    lb_ram_utilization = (sum(node_memory_MemFree{job="lb_cluster"}) / sum(node_memory_MemTotal{job="lb_cluster"})) * 100
+
+    lb_hdd_utilization = sum(node_filesystem_free{job="lb_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="lb_cluster",mountpoint="/", device="rootfs"}) *100
     app_hdd_utilization = sum(node_filesystem_free{job="app_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="app_cluster",mountpoint="/", device="rootfs"}) *100
+
+
+        ALERT lb_overloaded
+          IF lb_cpu_utilization > 60
+          FOR 1m
+          LABELS {alert="overloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "LB cluster overloaded"}
+
+        ALERT lb_underloaded
+          IF lb_cpu_utilization < 20
+          FOR 2m
+          LABELS {alert="underloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "LB cluster underloaded"}
         
         ALERT app_overloaded
           IF app_cpu_utilization > 60
@@ -111,7 +131,6 @@ write_files:
           LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster underloaded"}
-
 
 
 
