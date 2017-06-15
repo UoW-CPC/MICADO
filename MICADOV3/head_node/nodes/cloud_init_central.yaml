@@ -101,14 +101,14 @@ write_files:
         ALERT app_overloaded
           IF app_cpu_utilization > 60
           FOR 1m
-          LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
+          LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{variables.infrastructure_name}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster overloaded"}
         
         ALERT app_underloaded
           IF app_cpu_utilization < 20
           FOR 2m
-          LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
+          LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{variables.infrastructure_name}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster underloaded"}
 
@@ -228,11 +228,11 @@ write_files:
         
 
         VM_over_loaded() {
-            curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
+            curl -X POST http://{{variables.central_host_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
             }
 
         VM_under_loaded() {
-            curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
+            curl -X POST http://{{variables.central_host_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
             }
 
         containerscale() {
@@ -302,7 +302,7 @@ write_files:
         
             if [ "${!level}" = "docker" ] && [ "${!alertstatus}" = "firing" ]
             then
-                rm input.json getservice.json remaining.json spec.json output.json get.json replicas.json
+                rm -f input.json getservice.json remaining.json spec.json output.json get.json replicas.json
         	if [ "${!alert}" = "overloaded" ]
             then
             scaleparameter=1
