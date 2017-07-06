@@ -7,6 +7,6 @@ nodes:
   type: master
 
 variables:
-  master_host: "master"
-  master_host_ip: "x.x.x.x"
+  master_host_ip: "ip_of_the_master_node"
   occopus_restservice_port: "5000"
+  infrastructure_name: "XYZ_infrastructure_id"

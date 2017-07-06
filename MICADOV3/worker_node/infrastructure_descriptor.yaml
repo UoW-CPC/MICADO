@@ -2,9 +2,6 @@ user_id: userid
 infra_name: MICADO
 
 nodes:
-- &Database
-  name: db
-  type: db
 - &APP_cluster 
   name: app
   type: app
@@ -12,12 +9,5 @@ nodes:
     min: 1
     max: 10
 
-dependencies: # build order: database -> application nodes
-  - connection: [ *APP_cluster, *Database ]
-
 variables:
-  mysql_root_password: "root"
-  mysql_database_name: "dataavenue"
-  mysql_dbuser_username: "da"
-  mysql_dbuser_password: "da"
-  da_webapp_name: "blacktop3"
+  central_host_ip: "ip_address_of_the_master_node"
