@@ -12,12 +12,10 @@ nodes:
     min: 1
     max: 10
 
-dependencies: # build order: database -> central -> application nodes
+dependencies: # build order: database -> application nodes
   - connection: [ *APP_cluster, *Database ]
 
 variables:
-  central_host_ip: "x.x.x.x"
-  occopus_restservice_port: "5000"
   mysql_root_password: "root"
   mysql_database_name: "dataavenue"
   mysql_dbuser_username: "da"
