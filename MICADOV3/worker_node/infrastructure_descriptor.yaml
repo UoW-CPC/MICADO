@@ -1,10 +1,10 @@
 user_id: userid
-infra_name: MICADO
+infra_name: MICADO_worker
 
 nodes:
-- &APP_cluster 
-  name: app
-  type: app
+- &Worker_cluster 
+  name: worker
+  type: worker
   scaling:
     min: 1
     max: 10

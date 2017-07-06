@@ -1,5 +1,5 @@
 
-'node_def:app':
+'node_def:worker':
   -
     resource:
       type: nova
@@ -14,6 +14,6 @@
     contextualisation:
       type: cloudinit 
       context_template: !yaml_import
-        url: file://cloud_init_app.yaml
+        url: file://cloud_init_worker.yaml
 
 

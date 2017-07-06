@@ -1,5 +1,5 @@
 user_id: userid
-infra_name: MICADO
+infra_name: MICADO_master
 
 nodes:
 - &Master # Master services server

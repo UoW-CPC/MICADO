@@ -73,7 +73,7 @@ write_files:
       consul_sd_configs:
       - server: '172.31.0.5:8500'
         datacenter: application
-        services: ['lb_cluster', 'app_cluster', 'app_docker_cluster']
+        services: ['lb_cluster', 'worker_cluster', 'app_docker_cluster']
       relabel_configs:
       - source_labels: ['__meta_consul_service']
         regex:         '(.*)'
@@ -94,21 +94,21 @@ write_files:
 - path: /etc/prometheus/prometheus.rules
   content: |
 
-    app_cpu_utilization = 100 - (avg (rate(node_cpu{group="app_cluster",mode="idle"}[60s])) * 100)
-    app_ram_utilization = (sum(node_memory_MemFree{job="app_cluster"}) / sum(node_memory_MemTotal{job="app_cluster"})) * 100
-    app_hdd_utilization = sum(node_filesystem_free{job="app_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="app_cluster",mountpoint="/", device="rootfs"}) *100
+    worker_cpu_utilization = 100 - (avg (rate(node_cpu{group="worker_cluster",mode="idle"}[60s])) * 100)
+    worker_ram_utilization = (sum(node_memory_MemFree{job="worker_cluster"}) / sum(node_memory_MemTotal{job="worker_cluster"})) * 100
+    worker_hdd_utilization = sum(node_filesystem_free{job="worker_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="worker_cluster",mountpoint="/", device="rootfs"}) *100
         
-        ALERT app_overloaded
-          IF app_cpu_utilization > 60
+        ALERT worker_overloaded
+          IF worker_cpu_utilization > 60
           FOR 1m
-          LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{variables.infrastructure_name}}", type="VM"}
+          LABELS {alert="overloaded", cluster="worker_cluster", node="worker", infra_id="{{variables.infrastructure_name}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster overloaded"}
         
-        ALERT app_underloaded
-          IF app_cpu_utilization < 20
+        ALERT worker_underloaded
+          IF worker_cpu_utilization < 20
           FOR 2m
-          LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{variables.infrastructure_name}}", type="VM"}
+          LABELS {alert="underloaded", cluster="worker_cluster", node="worker", infra_id="{{variables.infrastructure_name}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster underloaded"}
 
@@ -202,7 +202,7 @@ write_files:
       if grep -q $alertnametemp servicenames;then 
           echo "need"
       else
-          if [ "$alertnametemp" != "lb" ] && [ "$alertnametemp" != "app" ];then
+          if [ "$alertnametemp" != "lb" ] && [ "$alertnametemp" != "worker" ];then
           echo "dont need"
           #every app has 2 alerts we need the first alert which starts with the name of the service, then delete 12 lines, 2 rules
           endline=12
@@ -265,7 +265,7 @@ write_files:
             echo "update_service call if possible"
 
 
-            curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle",group="app_cluster"}[1m])' > available_nodes_forscale.json
+            curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle",group="worker_cluster"}[1m])' > available_nodes_forscale.json
             curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle"}[1m])' | jq '. | length' > node_counter
             num_nodes=$(cat node_counter)
             ((num_nodes-=1))
