@@ -3,9 +3,6 @@
 #manage_etc_hosts: false
 
 packages:
-- unzip
-- dnsmasq
-- jq
 
 write_files:
 # consul config
@@ -16,9 +13,62 @@ write_files:
     "encrypt": "uohStneoKEoVYZIASGp6Nw==",
     "log_level": "INFO",
     "enable_syslog": false,
-    "service": { "name": "prometheus" }
+    "services": [{"name":"prometheus"}, {"name":"alertmanager"}, {"name":"prometheus_executor"}, {"name":"consul"}]
     }
   path: /etc/consul/config.json
+
+- content: |
+    {
+    "check": {
+    "id": "prometheus",
+    "name": "prometheus service check",
+    "http": "http://healthcheck_ip_change:9090",
+    "service_id" : "prometheus",
+    "interval": "60s",
+    "timeout": "10s"
+      }
+    }
+  path: /etc/consul/prometheus_check.json
+
+- content: |
+    {
+    "check": {
+    "id": "alertmanager",
+    "name": "alertmanager service check",
+    "http": "http://healthcheck_ip_change:9093",
+    "service_id" : "alertmanager",
+    "interval": "60s",
+    "timeout": "10s"
+      }
+    }
+  path: /etc/consul/alertmanager_check.json
+
+- content: |
+    {
+    "check": {
+    "id": "prometheus_executor",
+    "name": "prometheus executor service check",
+    "http": "http://healthcheck_ip_change:9095",
+    "service_id" : "prometheus_executor",
+    "interval": "60s",
+    "timeout": "10s"
+      }
+    }
+  path: /etc/consul/_executor_check.json
+
+- content: |
+    {
+    "check": {
+    "id": "consul",
+    "name": "consul service check",
+    "http": "http://healthcheck_ip_change:8500",
+    "service_id" : "consul",
+    "interval": "60s",
+    "timeout": "10s"
+      }
+    }
+  path: /etc/consul/consul_check.json
+
 
 #alertgenerator on startup
 - content: |
@@ -366,9 +416,11 @@ runcmd:
   - systemctl daemon-reload
   - systemctl enable alertgenerator
   - systemctl start alertgenerator
+#change health check ip address for host ip
+  - sed -i 's/healthcheck_ip_change/'$(hostname --ip-address)'/g' /etc/consul/*
 # Docker install
   - apt-get update
-  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget
+  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget unzip jq dnsmasq
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
   - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - apt-get update
@@ -390,6 +442,6 @@ runcmd:
   - docker run -d --network=my-net --ip="172.31.0.3" -v /etc/alertmanager/:/etc/alertmanager/ -p 9093:9093 prom/alertmanager
   - docker run -d --network=my-net --ip="172.31.0.4" -p 9095:9095 -v /etc/prometheus_executor/:/etc/prometheus_executor micado/prometheus_executor
   - export IP=$(hostname --ip-address)
-  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -config-file=/etc/consul/config.json
+  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -ui -config-dir=/etc/consul
   - docker run --name MYSQL_DATABASE -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=dataavenue -e MYSQL_USER=da -e MYSQL_PASSWORD=da -p 3306:3306 -d mysql/mysql-server:5.5
 
