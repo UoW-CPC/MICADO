@@ -86,6 +86,31 @@ write_files:
 
   path: /etc/systemd/system/alertgenerator.service
 
+#create worker node infra script
+-content: |
+    #!/bin/bash
+    echo "import and deploy worker infrastructure"
+
+    source ~/occopus/bin/activate
+
+    if [ -e $1 ]
+    then
+        occopus-import $1
+    else
+        echo "node definition does not exists! Aborting." 1>&2
+        exit 1
+
+    fi
+
+    if [ -e $2 ]
+    then
+        occopus-build $2
+    else
+        echo "no infrastructure descriptor file! Aborting." 1>&2
+        exit 1
+    fi
+  path: /opt/worker_infra_starter_script.sh
+
 # set hostname
 - content: |
     #!/bin/sh
@@ -416,6 +441,7 @@ runcmd:
   - systemctl daemon-reload
   - systemctl enable alertgenerator
   - systemctl start alertgenerator
+  - chmod +x /opt/worker_infra_starter_script.sh
 #change health check ip address for host ip
   - sed -i 's/healthcheck_ip_change/'$(hostname --ip-address)'/g' /etc/consul/*
 # Docker install
