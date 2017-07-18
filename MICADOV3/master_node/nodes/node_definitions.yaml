@@ -17,4 +17,4 @@
     contextualisation:
       type: cloudinit 
       context_template: !yaml_import
-        url: file://cloud_init_master.yam
+        url: file://cloud_init_master.yaml
