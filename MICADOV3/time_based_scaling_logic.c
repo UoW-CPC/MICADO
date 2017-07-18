@@ -28,6 +28,23 @@ func main ()
 
 }
 
+func init ()
+{
+	nmb_input_files = count("input_directory")
+	printf("There are $1 input files stored in the input directory.\n", nmb_input_files);
+	printf("Deadline in mimutes: \n");
+	deadline = console.read()
+	printf("Expected finish time of one experiment: \n");
+	one_finish = console.read()
+	printf("ID of the infrastructure: \n");
+	infra_id = console.read()
+	done = false
+	start_time = time.now()
+	end_time = start_time + convert.Totime(deadline)
+	calc_nmb_starting_instanced_needed (deadline, one_finish, nmb_input_files)
+
+}
+
 func calc_nmb_starting_instanced_needed (deadline, one_finish, nmb_input_files)
 {
 	//one instance finish one experiment in one_finish time. Two make 2 times more.
@@ -96,22 +113,7 @@ func display_completion ()
 {
 	printf(nmb_output_files ," of  ", nmb_input_files, " finished.");
 }
-func init ()
-{
-	nmb_input_files = count("input_directory")
-	printf("There are $1 input files stored in the input directory.\n", nmb_input_files);
-	printf("Deadline in mimutes: \n");
-	deadline = console.read()
-	printf("Expected finish time of one experiment: \n");
-	one_finish = console.read()
-	printf("ID of the infrastructure: \n");
-	infra_id = console.read()
-	done = false
-	start_time = time.now()
-	end_time = start_time + convert.Totime(deadline)
-	calc_nmb_starting_instanced_needed (deadline, one_finish, nmb_input_files)
 
-}
 
 
 

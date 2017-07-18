@@ -1,16 +1,19 @@
-
 'node_def:worker':
-  -
-    resource:
-      type: nova
-      endpoint: https://sztaki.cloud.mta.hu:5000/v3
-      project_id: a678d20e71cb4b9f812a31e5f3eb63b0
-      user_domain_name: Default
-      image_id: 607df938-3a02-4762-98c1-20891cd34eec
-      network_id: 3fd4c62d-5fbe-4bd9-9a9f-c161dabeefde
-      flavor_name: 4740c1b8-016d-49d5-a669-2b673f86317c
-      key_name: eniko-test
-      security_groups: [ MICADO ]
+  - resource:
+      type: cloudsigma
+      endpoint: https://zrh.cloudsigma.com/api/2.0
+      libdrive_id: 56f027c0-aeb6-478a-9bc0-6368bf702e4f
+      description:
+          cpu: 1000
+          mem: 1073741824
+          vnc_password: secret
+          pubkeys:
+              -
+                   YOUR_PRIVATE_KEY_ID
+          nics:
+              -
+                   ip_v4_conf:
+                      conf: dhcp
     contextualisation:
       type: cloudinit 
       context_template: !yaml_import
