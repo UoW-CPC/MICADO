@@ -1,7 +1,7 @@
 #cloud-config
 apt_upgrade: false
 apt_update: false
-manage_etc_hosts: false
+manage_etc_hosts: true
 package_update: false
 package_upgrade: false
 
@@ -15,62 +15,9 @@ write_files:
     "encrypt": "uohStneoKEoVYZIASGp6Nw==",
     "log_level": "INFO",
     "enable_syslog": false,
-    "services": [{"name":"prometheus"}, {"name":"alertmanager"}, {"name":"prometheus_executor"}, {"name":"consul"}]
+    "service": { "name": "prometheus" }
     }
   path: /etc/consul/config.json
-
-- content: |
-    {
-    "check": {
-    "id": "prometheus",
-    "name": "prometheus service check",
-    "http": "http://healthcheck_ip_change:9090",
-    "service_id" : "prometheus",
-    "interval": "60s",
-    "timeout": "10s"
-      }
-    }
-  path: /etc/consul/prometheus_check.json
-
-- content: |
-    {
-    "check": {
-    "id": "alertmanager",
-    "name": "alertmanager service check",
-    "http": "http://healthcheck_ip_change:9093",
-    "service_id" : "alertmanager",
-    "interval": "60s",
-    "timeout": "10s"
-      }
-    }
-  path: /etc/consul/alertmanager_check.json
-
-- content: |
-    {
-    "check": {
-    "id": "prometheus_executor",
-    "name": "prometheus executor service check",
-    "http": "http://healthcheck_ip_change:9095",
-    "service_id" : "prometheus_executor",
-    "interval": "60s",
-    "timeout": "10s"
-      }
-    }
-  path: /etc/consul/_executor_check.json
-
-- content: |
-    {
-    "check": {
-    "id": "consul",
-    "name": "consul service check",
-    "http": "http://healthcheck_ip_change:8500",
-    "service_id" : "consul",
-    "interval": "60s",
-    "timeout": "10s"
-      }
-    }
-  path: /etc/consul/consul_check.json
-
 
 #alertgenerator on startup
 - content: |
@@ -87,31 +34,6 @@ write_files:
     Alias = alert_generator.service
 
   path: /etc/systemd/system/alertgenerator.service
-
-#create worker node infra script
-- content: |
-    #!/bin/bash
-    echo "import and deploy worker infrastructure"
-
-    source ~/occopus/bin/activate
-
-    if [ -e $1 ]
-    then
-        occopus-import $1
-    else
-        echo "node definition does not exists! Aborting." 1>&2
-        exit 1
-
-    fi
-
-    if [ -e $2 ]
-    then
-        occopus-build $2
-    else
-        echo "no infrastructure descriptor file! Aborting." 1>&2
-        exit 1
-    fi
-  path: /opt/worker_infra_starter_script.sh
 
 # set hostname
 - content: |
@@ -150,7 +72,7 @@ write_files:
       consul_sd_configs:
       - server: '172.31.0.5:8500'
         datacenter: application
-        services: ['lb_cluster', 'worker_cluster', 'app_docker_cluster']
+        services: ['lb_cluster', 'app_cluster', 'app_docker_cluster']
       relabel_configs:
       - source_labels: ['__meta_consul_service']
         regex:         '(.*)'
@@ -171,24 +93,43 @@ write_files:
 - path: /etc/prometheus/prometheus.rules
   content: |
 
-    worker_cpu_utilization = 100 - (avg (rate(node_cpu{group="worker_cluster",mode="idle"}[60s])) * 100)
-    worker_ram_utilization = (sum(node_memory_MemFree{job="worker_cluster"}) / sum(node_memory_MemTotal{job="worker_cluster"})) * 100
-    worker_hdd_utilization = sum(node_filesystem_free{job="worker_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="worker_cluster",mountpoint="/", device="rootfs"}) *100
-        
-        ALERT worker_overloaded
-          IF worker_cpu_utilization > 60
+    lb_cpu_utilization = 100 - (avg (rate(node_cpu{group="lb_cluster",mode="idle"}[60s])) * 100)
+    app_cpu_utilization = 100 - (avg (rate(node_cpu{group="app_cluster",mode="idle"}[60s])) * 100)
+
+    app_ram_utilization = (sum(node_memory_MemFree{job="app_cluster"}) / sum(node_memory_MemTotal{job="app_cluster"})) * 100
+    lb_ram_utilization = (sum(node_memory_MemFree{job="lb_cluster"}) / sum(node_memory_MemTotal{job="lb_cluster"})) * 100
+
+    lb_hdd_utilization = sum(node_filesystem_free{job="lb_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="lb_cluster",mountpoint="/", device="rootfs"}) *100
+    app_hdd_utilization = sum(node_filesystem_free{job="app_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="app_cluster",mountpoint="/", device="rootfs"}) *100
+
+
+        ALERT lb_overloaded
+          IF lb_cpu_utilization > 60
           FOR 1m
-          LABELS {alert="overloaded", cluster="worker_cluster", node="worker", infra_id="{{variables.infrastructure_name}}", type="VM"}
+          LABELS {alert="overloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "LB cluster overloaded"}
+
+        ALERT lb_underloaded
+          IF lb_cpu_utilization < 20
+          FOR 2m
+          LABELS {alert="underloaded", cluster="lb_cluster", node="lb", infra_id="{{infra_id}}", type="VM"}
+          ANNOTATIONS {
+          summary = "LB cluster underloaded"}
+        
+        ALERT app_overloaded
+          IF app_cpu_utilization > 60
+          FOR 1m
+          LABELS {alert="overloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster overloaded"}
         
-        ALERT worker_underloaded
-          IF worker_cpu_utilization < 20
+        ALERT app_underloaded
+          IF app_cpu_utilization < 20
           FOR 2m
-          LABELS {alert="underloaded", cluster="worker_cluster", node="worker", infra_id="{{variables.infrastructure_name}}", type="VM"}
+          LABELS {alert="underloaded", cluster="app_cluster", node="app", infra_id="{{infra_id}}", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster underloaded"}
-
 
 
 
@@ -245,10 +186,9 @@ write_files:
       #create new rules
       if [ -n "$name" ]; then
       if grep -q $name "/etc/prometheus/prometheus.rules"; then
-          echo "already exists"     
+      echo "already exists"     
       else
-          echo "create new rule named $name " 
-
+          echo "create new rule" 
           echo "ALERT $name"_overloaded"
           IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes }[30s]))*100 > $cpulimit
           FOR 30s
@@ -279,7 +219,7 @@ write_files:
       if grep -q $alertnametemp servicenames;then 
           echo "need"
       else
-          if [ "$alertnametemp" != "lb" ] && [ "$alertnametemp" != "worker" ];then
+          if [ $alertnametemp != "lb" ] && [ $alertnametemp != "app" ];then
           echo "dont need"
           #every app has 2 alerts we need the first alert which starts with the name of the service, then delete 12 lines, 2 rules
           endline=12
@@ -305,11 +245,11 @@ write_files:
         
 
         VM_over_loaded() {
-            curl -X POST http://{{variables.master_host_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
+            curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
             }
 
         VM_under_loaded() {
-            curl -X POST http://{{variables.master_host_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
+            curl -X POST http://{{variables.occopus_restservice_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
             }
 
         containerscale() {
@@ -342,7 +282,7 @@ write_files:
             echo "update_service call if possible"
 
 
-            curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle",group="worker_cluster"}[1m])' > available_nodes_forscale.json
+            curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle",group="app_cluster"}[1m])' > available_nodes_forscale.json
             curl -g 'http://hostIP:9090/api/v1/query?query=rate(node_cpu{mode="idle"}[1m])' | jq '. | length' > node_counter
             num_nodes=$(cat node_counter)
             ((num_nodes-=1))
@@ -379,21 +319,21 @@ write_files:
         
             if [ "${!level}" = "docker" ] && [ "${!alertstatus}" = "firing" ]
             then
-                rm -f input.json getservice.json remaining.json spec.json output.json get.json replicas.json
-        	if [ "${!alert}" = "overloaded" ]
+                rm input.json getservice.json remaining.json spec.json output.json get.json replicas.json
+          if [ "${!alert}" = "overloaded" ]
             then
             scaleparameter=1
             containerscale "${!application}" "$scaleparameter"
-        	elif [ "${!alert}" = "underloaded" ]
+          elif [ "${!alert}" = "underloaded" ]
             then
             scaleparameter=-1
             containerscale "${!application}" "$scaleparameter"
-        	fi
+          fi
             fi
         
         
             if [ "${!alert}" = "overloaded" ] && [ "${!level}" = "VM" ] && [ "${!alertstatus}" = "firing" ];
-           		then
+              then
                     VM_over_loaded "${!infra}" "${!node}"
             fi
             if [ "${!alert}" = "underloaded" ] && [ "${!level}" = "VM" ] && [ "${!alertstatus}" = "firing" ]; 
@@ -418,46 +358,30 @@ write_files:
    [Install]
    WantedBy=sockets.target
 
-- content: |
-    #!/bin/bash
-    echo "Setup NETWORK starts."
-    myhost=`hostname`
-    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
-    cp /etc/hosts /etc/hosts.old
-    grep -v "$myhost" /etc/hosts.old > /etc/hosts
-
-    echo "IPADDRESS: $ipaddress"
-    echo "$ipaddress $myhost" >> /etc/hosts
-
-    rm -rf /etc/resolvconf/*
-    echo "Setup NETWORK finished."
-  path: /bin/consul-set-network.sh
-  permissions: '755'
-
 - path: /etc/resolvconf/resolv.conf.d/base
   content: |
     nameserver 8.8.8.8
 
-
 runcmd:
   - adduser --disabled-password --gecos "" prometheus
-  - /bin/consul-set-network.sh
   - sudo dhclient
   - resolvconf -u
-  - chmod +x /opt/worker_infra_starter_script.sh
-#change health check ip address for host ip
-  - sed -i 's/healthcheck_ip_change/'$(hostname --ip-address)'/g' /etc/consul/*
 # Docker install
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
   - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-  - apt-get update
-  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget unzip jq dnsmasq
-  - apt-get install -y docker-ce
+  - apt-get update && apt-get install -y docker-ce
+  - apt-get install -y apt-transport-https ca-certificates curl software-properties-common wget jq unzip
   - systemctl enable docker-tcp.socket
   - systemctl enable docker.socket
   - systemctl stop docker
   - systemctl start docker-tcp.socket
   - systemctl start docker
+# start linuxservices
+  - chmod 777 /etc/prometheus_executor/conf.sh
+  - chmod 777 /etc/prometheus/alert_generator.sh
+  - systemctl daemon-reload
+  - systemctl enable alertgenerator
+  - systemctl start alertgenerator
 # Start Swarm
   - export IP=$(hostname --ip-address); docker swarm init --advertise-addr=$IP
   - docker node update --availability drain $(hostname)
@@ -465,16 +389,9 @@ runcmd:
   - export IP=$(hostname --ip-address)
   - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh
 #Start infra. services
-  - chmod 777 /etc/prometheus_executor/conf.sh
-  - chmod 777 /etc/prometheus/alert_generator.sh
-  - systemctl daemon-reload
-  - systemctl enable alertgenerator
-  - systemctl start alertgenerator
   - docker network create -d bridge my-net --subnet 172.31.0.0/24
   - docker run -d --network=my-net --ip="172.31.0.2" -p 9090:9090 -v /etc/:/etc prom/prometheus
   - docker run -d --network=my-net --ip="172.31.0.3" -v /etc/alertmanager/:/etc/alertmanager/ -p 9093:9093 prom/alertmanager
   - docker run -d --network=my-net --ip="172.31.0.4" -p 9095:9095 -v /etc/prometheus_executor/:/etc/prometheus_executor micado/prometheus_executor
   - export IP=$(hostname --ip-address)
-  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -ui -config-dir=/etc/consul
-  - docker run --name MYSQL_DATABASE -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=dataavenue -e MYSQL_USER=da -e MYSQL_PASSWORD=da -p 3306:3306 -d mysql/mysql-server:5.5
-
+  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -config-file=/etc/consul/config.json
