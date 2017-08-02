@@ -94,7 +94,7 @@ runcmd:
 
 # Infra services start
   - sudo docker run -d -p 9100:9100 prom/node-exporter
-  - export IP=$(hostname --ip-address)
+  - export IP=$(hostname -I | cut -d\  -f1)
   - sudo docker run -d --net=host -e 'CONSUL_LOCAL_CONFIG={"leave_on_terminate":true}' -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp -v /etc/consul/:/etc/consul   consul agent -advertise=$IP -retry-join={{getip(variables.central_host_ip)}} -config-file=/etc/consul/config.json 
   - sudo docker run  --volume=/:/rootfs:ro  --volume=/var/run:/var/run:rw  --volume=/sys:/sys:ro  --volume=/var/lib/docker/:/var/lib/docker:ro  --publish=9200:8080  --detach=true  --name=cadvisor google/cadvisor:latest
 
