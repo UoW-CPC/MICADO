@@ -1,0 +1,17 @@
+'node_def:master':
+  -
+    resource:
+      type: ec2
+      endpoint: https://ec2.us-east-1.amazonaws.com/
+      regionname: us-east-1
+      image_id: ami-cd0f5cb6
+      instance_type: t2.micro
+      key_name: botondrakoczi
+      security_group_ids: 
+           - sg-35cad144
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://cloud_init_master.yaml
+
+

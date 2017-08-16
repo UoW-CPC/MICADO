@@ -1,9 +1,9 @@
-'node_def:central':
+'node_def:master':
   - resource:
       type: cloudsigma
       endpoint: https://zrh.cloudsigma.com/api/2.0
       libdrive_id: 56f027c0-aeb6-478a-9bc0-6368bf702e4f
-      description: MICADO_HEAD_NODE
+      description: MICADO_MASTER_NODE
           cpu: 1000
           mem: 1073741824
           vnc_password: secret
