@@ -72,21 +72,6 @@ write_files:
   path: /etc/consul/consul_check.json
 
 
-#alertgenerator on startup
-- content: |
-    [Unit]
-    Description = alert-generator
-    After = docker.service
-
-    [Service]
-    ExecStart = /etc/prometheus/alert_generator.sh
-    Restart=on-failure
-
-    [Install]
-    WantedBy = default.target
-    Alias = alert_generator.service
-
-  path: /etc/systemd/system/alertgenerator.service
 
 #create worker node infra script
 - content: |
@@ -223,7 +208,7 @@ write_files:
     do
 
     #getservices
-    curl -X GET http://0.0.0.0:2375/v1.27/services > getservices.json
+    curl -X GET http://hostIP:2375/v1.27/services > getservices.json
 
     jq '. | length-1' getservices.json > nmbservices
     jq '.[].Spec.Name' getservices.json | sed 's/.//;s/.$//' > servicenames
@@ -292,7 +277,7 @@ write_files:
       fi
     done
     #reload prometheus configuration
-    curl -X POST http://127.0.0.1:9090/-/reload
+    curl -X POST http://hostIP:9090/-/reload
     sleep 10
     done
 
@@ -463,13 +448,11 @@ runcmd:
   - docker node update --availability drain $(hostname)
 # update executor IP
   - export IP=$(hostname -I | cut -d\  -f1)
-  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh
+  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.
+  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus/alert_generator.sh
 #Start infra. services
   - chmod 777 /etc/prometheus_executor/conf.sh
   - chmod 777 /etc/prometheus/alert_generator.sh
-  - systemctl daemon-reload
-  - systemctl enable alertgenerator
-  - systemctl start alertgenerator
   - docker network create -d bridge my-net --subnet 172.31.0.0/24
   - docker run -d --network=my-net --ip="172.31.0.2" -p 9090:9090 -v /etc/:/etc prom/prometheus
   - docker run -d --network=my-net --ip="172.31.0.3" -v /etc/alertmanager/:/etc/alertmanager/ -p 9093:9093 prom/alertmanager
@@ -477,4 +460,5 @@ runcmd:
   - export IP=$(hostname -I | cut -d\  -f1)
   - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -ui -config-dir=/etc/consul
   - docker run --name MYSQL_DATABASE -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=dataavenue -e MYSQL_USER=da -e MYSQL_PASSWORD=da -p 3306:3306 -d mysql/mysql-server:5.5
+  - docker run -d -v /etc/prometheus/:/etc/prometheus micado/alert_generator:1.0
 
