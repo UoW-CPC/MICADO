@@ -19,7 +19,7 @@ infra_id = ""
 def main ():
 {
 	init()
-	while !done:
+	while done == false:
 	{
 		display_completion()
 		if nmb_input_files == nmb_output_files 
