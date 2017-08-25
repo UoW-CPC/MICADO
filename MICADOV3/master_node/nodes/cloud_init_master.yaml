@@ -350,7 +350,6 @@ write_files:
               echo "no space"
               fi
             done
-
             fi
             }
 
