@@ -338,6 +338,10 @@ write_files:
                actual_free_cpu=$(jq -r --slurpfile newvalue counter '.data.result[$newvalue[0]].value[1]' available_nodes_forscale.json | sed 's/^..//'  | cut -c 1-2) 
              echo "$actual_free_cpu"
              echo "$service_cpulimit"
+             if [ "$actual_free_cpu" = "ll" ]; then
+             actual_free_cpu=0
+             echo "correct cpu limit is " $actual_free_cpu
+             fi
               if [ $actual_free_cpu -gt $service_cpulimit ] || [ $2 -ne "1" ]; then
               echo "true scale"
               curl -X POST --header "Content-Type: application/json" http://hostIP:2375/v1.27/services/$1/update?version=$index -d @output.json
