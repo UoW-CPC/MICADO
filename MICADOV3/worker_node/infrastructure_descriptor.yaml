@@ -10,4 +10,4 @@ nodes:
     max: 10
 
 variables:
-  central_host_ip: "ip_address_of_the_master_node"
+  master_host_ip: "ip_address_of_the_master_node"
