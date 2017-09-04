@@ -26,8 +26,8 @@ def main ():
 			{
 			done = true
 			}
-				provision(one_finish)
-				datetime.time.sleep(one_finish) //check every X minute 
+				provision(one_finish, nmb_output_files)
+				datetime.time.sleep(60) //check every X minute 
 	}
 
 }
@@ -60,7 +60,7 @@ def calc_nmb_starting_instances_needed (deadline, one_finish, nmb_input_files):
 		theoritical_completion_time = (one_finish*nmb_input_files) / float(deadline)
 		nmb_starting_instances = math.floor(theoritical_completion_time)
 	}
-	worker_starter()
+	worker_starter(nmb_starting_instances, infra_id)
 }
 def worker_starter (nmb_starting_instances, infra_id):
 {
@@ -74,7 +74,7 @@ def worker_starter (nmb_starting_instances, infra_id):
 def provision (one_finish, nmb_output_files):
 {
 	// check every X min if it is over or underprovisioned. Make adjustements
-	theoritical_status = math.floor(one_finish*(sec_counter()))
+	theoritical_status = math.floor(one_finish*(sec_counter(start_time)))
 	if nmb_output_files < theoritical_status
 	{
 		for x in range (0,theoritical_status):
@@ -102,20 +102,20 @@ def scale_down (infra_id):
 	// need to consider if a job is running on an instance what will happen with it.
 }
 
-def sec_counter ():
+def sec_counter (start_time):
 {
     time.clock()    
     elapsed = 0
     while elapsed < seconds:
         elapsed = time.time() - start_time
         time.sleep(1)
-        
 	return elapsed
 }
 
 def display_completion ():
 {
 	print(nmb_output_files ," of  ", nmb_input_files, " is finished.")
+
 }
 
 
