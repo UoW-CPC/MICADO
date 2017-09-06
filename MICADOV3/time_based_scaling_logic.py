@@ -2,7 +2,7 @@ import datetime
 import os, os.path
 
 deadline = 0 // in minutes
-one_finish = 0
+one_finish = 0 // estimate
 nmb_input_files = 0
 nmb_output_files = 0
 datetime.time start_time, end_time
