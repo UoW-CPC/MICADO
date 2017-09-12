@@ -1,12 +1,7 @@
 user_id: userid
-infra_name: MICADO_master
+infra_name: MICADO-master
 
 nodes:
 - &Master # Master services server
   name: master
   type: master
-
-variables:
-  master_host_ip: "ip_of_the_master_node"
-  occopus_restservice_port: "5000"
-  infrastructure_name: "XYZ_infrastructure_id"

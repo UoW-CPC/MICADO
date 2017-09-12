@@ -1,5 +1,5 @@
 user_id: userid
-infra_name: MICADO_worker
+infra_name: MICADO-worker
 
 nodes:
 - &Worker_cluster 

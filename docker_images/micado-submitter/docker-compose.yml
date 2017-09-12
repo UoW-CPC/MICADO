@@ -1,0 +1,48 @@
+version: '3.3'
+
+services:
+   submitter:
+     image: micado/micado-submitter
+     container_name: micado-submitter
+     volumes:
+      - "/opt/volumes/micado/:/etc/micado/occopus/"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+     environment:
+      #Input template files
+       TEMP_AUTH_DATA_FILE: /app/templates/temp_auth_data.yaml
+       TEMP_NODE_DEF_FILE: /app/templates/temp_node_definitions.yaml
+       TEMP_INFRA_DEF_FILE: /app/templates/temp_infrastructure_descriptor.yaml
+       #Input user data files
+       USER_DATA_FILE: /app/templates/temp_user_data.yaml
+       #Output occopus descriptors
+       AUTH_DATA_FILE: /etc/micado/occopus/auth_data.yaml
+       NODE_DEF_FILE: /etc/micado/occopus/nodes/node_definitions.yaml
+       INFRA_DEF_FILE: /etc/micado/occopus/infrastructure_descriptor.yaml
+       MASTER_IP: $IP
+       WORKER_INFRA_NAME: micado_worker_infra
+     #command: python /app/submitter/submitter.py
+     command: /bin/bash
+     stdin_open: true
+     tty: true
+   redis:
+    image: redis
+    container_name: occopus_redis
+    volumes:
+      - "/opt/volumes/redis:/data/"
+    command: redis-server --appendonly yes
+   occopus:
+    depends_on:
+      - redis
+      - submitter
+    image: micado/occopus:1.5
+    container_name: occopus
+    links:
+      - redis
+    ports:
+      - 5000:5000
+    volumes:
+      - "/opt/volumes/micado/:/etc/micado/occopus/"
+    environment:
+      - REDIS_NAME=redis
+    command: occopus-rest-service --auth_data_path /etc/micado/occopus/auth_data.yaml --host "$HOST_IP"
+

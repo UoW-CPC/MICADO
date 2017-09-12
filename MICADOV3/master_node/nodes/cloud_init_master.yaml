@@ -7,6 +7,26 @@ package_upgrade: false
 
 
 write_files:
+
+- path: /var/lib/micado/occopus/temp_user_data.yaml
+  content: |
+    user_data:
+      auth_data:
+        type: ec2
+        accesskey: user_accesskey
+        secretkey: user_secretkey
+
+      resource:
+        type: ec2
+        endpoint: http://cfe2.lpds.sztaki.hu:4567
+        regionname: ROOT
+        image_id: ami-00001599
+        instance_type: m1.medium
+
+      scaling:
+        min: 2
+        max: 10
+
 # consul config
 - content: |
     {
@@ -163,14 +183,14 @@ write_files:
         ALERT worker_overloaded
           IF worker_cpu_utilization > 60
           FOR 1m
-          LABELS {alert="overloaded", cluster="worker_cluster", node="worker", infra_id="{{variables.infrastructure_name}}", type="VM"}
+          LABELS {alert="overloaded", cluster="worker_cluster", node="worker", infra_id="micado_worker_infra", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster overloaded"}
         
         ALERT worker_underloaded
           IF worker_cpu_utilization < 20
           FOR 2m
-          LABELS {alert="underloaded", cluster="worker_cluster", node="worker", infra_id="{{variables.infrastructure_name}}", type="VM"}
+          LABELS {alert="underloaded", cluster="worker_cluster", node="worker", infra_id="micado_worker_infra", type="VM"}
           ANNOTATIONS {
           summary = "Application cluster underloaded"}
 
@@ -290,11 +310,11 @@ write_files:
         
 
         VM_over_loaded() {
-            curl -X POST http://{{variables.master_host_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaleup/$2
+            curl -X POST http://hostIP:5000/infrastructures/$1/scaleup/$2
             }
 
         VM_under_loaded() {
-            curl -X POST http://{{variables.master_host_ip}}:{{variables.occopus_restservice_port}}/infrastructures/$1/scaledown/$2
+            curl -X POST http://hostIP:5000/infrastructures/$1/scaledown/$2
             }
 
         containerscale() {
@@ -393,19 +413,6 @@ write_files:
         }
         main "$@"
 
-
-
-# Docker API
-- path: /etc/systemd/system/docker-tcp.socket
-  content: |
-   [Unit]
-   Description=Docker Socket for the API
-   [Socket]
-   ListenStream=2375
-   Service=docker.service
-   [Install]
-   WantedBy=sockets.target
-
 - content: |
     #!/bin/bash
     echo "Setup NETWORK starts."
@@ -426,6 +433,53 @@ write_files:
   content: |
     nameserver 8.8.8.8
 
+- path: /etc/micado/docker-compose.yml
+  content: |
+    version: '3.3'
+
+    services:
+       submitter:
+         image: micado/micado-submitter
+         container_name: micado-submitter
+         volumes:
+          - "/var/run/docker.sock:/var/run/docker.sock"
+          - "/etc/micado/occopus/:/etc/micado/occopus/"
+          - "/var/lib/micado/occopus/:/var/lib/micado/occopus/"
+         environment:
+          #Input template files
+           TEMP_AUTH_DATA_FILE: /var/lib/micado/occopus/temp_auth_data.yaml
+           TEMP_NODE_DEF_FILE: /var/lib/micado/occopus/temp_node_definitions.yaml
+           TEMP_INFRA_DEF_FILE: /var/lib/micado/occopus/temp_infrastructure_descriptor.yaml
+           #Input user data files
+           USER_DATA_FILE: /var/lib/micado/occopus/temp_user_data.yaml
+           #Output occopus descriptors
+           AUTH_DATA_FILE: /etc/micado/occopus/auth_data.yaml
+           NODE_DEF_FILE: /etc/micado/occopus/nodes/node_definitions.yaml
+           INFRA_DEF_FILE: /etc/micado/occopus/infrastructure_descriptor.yaml
+           MASTER_IP: $IP
+           WORKER_INFRA_NAME: micado_worker_infra
+         command: python /app/submitter/submitter.py
+       redis:
+        image: redis
+        container_name: occopus_redis
+        volumes:
+          - "/var/lib/micado/occopus/redis:/data/"
+        command: redis-server --appendonly yes
+       occopus:
+        depends_on:
+          - redis
+          - submitter
+        image: micado/occopus:1.5
+        container_name: occopus
+        links:
+          - redis
+        ports:
+          - 5000:5000
+        volumes:
+          - "/etc/micado/occopus/:/etc/micado/occopus/"
+        environment:
+          - REDIS_NAME=redis
+        command: occopus-rest-service --auth_data_path /etc/micado/occopus/auth_data.yaml --host "$HOST_IP"
 
 runcmd:
   - adduser --disabled-password --gecos "" prometheus
@@ -436,24 +490,31 @@ runcmd:
 #change health check ip address for host ip
   - sed -i 's/healthcheck_ip_change/'$(hostname --ip-address)'/g' /etc/consul/*
 # Docker install
+  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget unzip jq dnsmasq
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
   - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - apt-get update
-  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget unzip jq dnsmasq
   - apt-get install -y docker-ce
-  - systemctl enable docker-tcp.socket
-  - systemctl enable docker.socket
-  - systemctl stop docker
-  - systemctl start docker-tcp.socket
-  - systemctl start docker
+  - export IP=$(hostname -I | cut -d\  -f1)
+  - sed -i -e "s/-H fd:\/\//-H fd:\/\/ -H tcp:\/\/$IP:2375/g" /lib/systemd/system/docker.service
+  - systemctl daemon-reload
+  - service docker restart
+# Install Docker Compose
+  - curl -L https://github.com/docker/compose/releases/download/1.16.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
 # Start Swarm
-  - export IP=$(hostname -I | cut -d\  -f1); docker swarm init --advertise-addr=$IP
+  - docker swarm init --advertise-addr=$IP
   - docker node update --availability drain $(hostname)
 # update executor IP
   - export IP=$(hostname -I | cut -d\  -f1)
-  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.
+  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh
   - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus/alert_generator.sh
 #Start infra. services
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/templates/temp_auth_data.yaml --create-dirs -o /var/lib/micado/occopus/temp_auth_data.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/templates/temp_node_definitions.yaml --create-dirs -o /var/lib/micado/occopus/temp_node_definitions.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/infrastructure_descriptor.yaml  --create-dirs -o /var/lib/micado/occopus/temp_infrastructure_descriptor.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/nodes/cloud_init_worker.yaml --create-dirs -o /etc/micado/occopus/nodes/cloud_init_worker.yaml
+  - docker-compose -f /etc/micado/docker-compose.yml up -d
   - chmod 777 /etc/prometheus_executor/conf.sh
   - chmod 777 /etc/prometheus/alert_generator.sh
   - docker network create -d bridge my-net --subnet 172.31.0.0/24
