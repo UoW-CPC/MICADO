@@ -71,6 +71,7 @@ write_files:
 runcmd:
   - adduser --disabled-password --gecos "" prometheus
   - /bin/consul-set-network.sh
+  - sudo hostnamectl set-hostname $(date +%s | sha256sum | base64 | head -c 32 ; echo)
 # host: ubuntu
   - sudo dhclient
   - resolvconf -u
