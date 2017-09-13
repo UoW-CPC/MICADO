@@ -39,33 +39,6 @@ write_files:
     }
   path: /etc/consul/config.json
 
-
-
-#create worker node infra script
-- content: |
-    #!/bin/bash
-    echo "import and deploy worker infrastructure"
-
-    source ~/occopus/bin/activate
-
-    if [ -e $1 ]
-    then
-        occopus-import $1
-    else
-        echo "node definition does not exists! Aborting." 1>&2
-        exit 1
-
-    fi
-
-    if [ -e $2 ]
-    then
-        occopus-build $2
-    else
-        echo "no infrastructure descriptor file! Aborting." 1>&2
-        exit 1
-    fi
-  path: /opt/worker_infra_starter_script.sh
-
 # set hostname
 - content: |
     #!/bin/sh
@@ -329,7 +302,6 @@ runcmd:
   - /bin/consul-set-network.sh
   - sudo dhclient
   - resolvconf -u
-  - chmod +x /opt/worker_infra_starter_script.sh
 #download config files
   - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/executor_config.sh --create-dirs -o /etc/prometheus_executor/conf.sh
   - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/consul_checks.json --create-dirs -o /etc/consul/checks.json

@@ -5,6 +5,7 @@ import os
 import ruamel.yaml as YAML
 import docker
 import time
+import requests
 
 yaml = YAML
 yaml.default_flow_style = False
@@ -68,6 +69,7 @@ if run:
     print(result)
     if "Successfully imported" in result:
         print(occopus.exec_run("occopus-build --auth_data_path {0} -i {1} {2}".format(auth_data_file, worker_infra_name, infra_def_file)))
+        print(requests.post("http://occopus:5000/infrastructures/{0}/attach".format(worker_infra_name)))
     else:
         print("Occopus import was unsuccessful!")
 else:
