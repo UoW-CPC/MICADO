@@ -1,0 +1,35 @@
+{
+    "checks": [
+    {
+    "id": "prometheus",
+    "name": "prometheus service check",
+    "http": "http://healthcheck_ip_change:9090",
+    "service_id" : "prometheus",
+    "interval": "60s",
+    "timeout": "10s"
+    },
+    {
+    "id": "alertmanager",
+    "name": "alertmanager service check",
+    "http": "http://healthcheck_ip_change:9093",
+    "service_id" : "alertmanager",
+    "interval": "60s",
+    "timeout": "10s"
+    },
+    {
+    "id": "prometheus_executor",
+    "name": "prometheus executor service check",
+    "http": "http://healthcheck_ip_change:9095",
+    "service_id" : "prometheus_executor",
+    "interval": "60s",
+    "timeout": "10s"
+    },
+    {
+    "id": "consul",
+    "name": "consul service check",
+    "http": "http://healthcheck_ip_change:8500",
+    "service_id" : "consul",
+    "interval": "60s",
+    "timeout": "10s"
+      } ]
+    }
