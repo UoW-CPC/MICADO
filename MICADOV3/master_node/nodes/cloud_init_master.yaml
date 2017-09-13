@@ -302,6 +302,7 @@ runcmd:
   - /bin/consul-set-network.sh
   - sudo dhclient
   - resolvconf -u
+  - echo nameserver 8.8.8.8 >> /etc/resolv.conf
 #download config files
   - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/executor_config.sh --create-dirs -o /etc/prometheus_executor/conf.sh
   - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/consul_checks.json --create-dirs -o /etc/consul/checks.json
