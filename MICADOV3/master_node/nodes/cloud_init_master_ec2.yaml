@@ -7,30 +7,21 @@ package_upgrade: false
 
 
 write_files:
-#USER DATA
+
 - path: /var/lib/micado/occopus/temp_user_data.yaml
   content: |
     user_data:
       auth_data:
-        type: cloudsigma
-        email: YOUR_EMAIL_ADDRESS
-        password: YOUR_PASSWORD
+        type: ec2
+        accesskey: user_accesskey
+        secretkey: user_secretkey
 
       resource:
-        type: cloudsigma
-        endpoint: https://zrh.cloudsigma.com/api/2.0
-        libdrive_id: 8cbd5932-f0dd-4e68-b119-f74b9ef12d9e
-        description:
-            cpu: 1000
-            mem: 1073741824
-            vnc_password: secret
-            pubkeys:
-                -
-                    YOUR_PUBLIC_KEY_UID
-            nics:
-                -
-                     ip_v4_conf:
-                        conf: dhcp
+        type: ec2
+        endpoint: http://cfe2.lpds.sztaki.hu:4567
+        regionname: ROOT
+        image_id: ami-00001599
+        instance_type: m1.medium
 
       scaling:
         min: 2
