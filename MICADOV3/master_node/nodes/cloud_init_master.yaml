@@ -49,23 +49,46 @@ write_files:
   path: /etc/consul/config.json
 
 # set hostname
+#- content: |
+#    #!/bin/sh
+#    if [ $reason = "BOUND" ]; then
+#        oldhostname=$(hostname -s)
+#        if [ $oldhostname != $new_host_name ]; then
+#            # Rename Host
+#            echo $new_host_name > /etc/hostname
+#            hostname -F /etc/hostname
+#            # Update /etc/hosts if needed
+#            TMPHOSTS=/etc/hosts.dhcp.new
+#            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+#                # Remove the 127.0.1.1 put there by the debian installer
+#                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+#                # Add the our new ip address and name
+#                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+#                mv $TMPHOSTS /etc/hosts
+#            fi
+#            # Recreate SSH2 keys
+#            export DEBIAN_FRONTEND=noninteractive 
+#            dpkg-reconfigure openssh-server
+#        fi
+#    fi
+#path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+
+# set hostname
 - content: |
     #!/bin/sh
     if [ $reason = "BOUND" ]; then
         oldhostname=$(hostname -s)
+        new_host_name=master-$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+        echo $oldhostname >> /tmp/hostname.log
+        echo $new_host_name >> /tmp/hostname.log
         if [ $oldhostname != $new_host_name ]; then
+            echo "old != new" >> /tmp/hostname.log
             # Rename Host
             echo $new_host_name > /etc/hostname
             hostname -F /etc/hostname
             # Update /etc/hosts if needed
-            TMPHOSTS=/etc/hosts.dhcp.new
-            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
-                # Remove the 127.0.1.1 put there by the debian installer
-                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
-                # Add the our new ip address and name
-                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
-                mv $TMPHOSTS /etc/hosts
-            fi
+            line=127.0.1.1'\t'$new_host_name
+            sed -i "/127.0.1.1/c$line" /etc/hosts
             # Recreate SSH2 keys
             export DEBIAN_FRONTEND=noninteractive 
             dpkg-reconfigure openssh-server
