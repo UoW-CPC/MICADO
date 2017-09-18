@@ -74,27 +74,27 @@ write_files:
 #path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
 
 # set hostname
-- content: |
-    #!/bin/sh
-    if [ $reason = "BOUND" ]; then
-        oldhostname=$(hostname -s)
-        new_host_name=master-$(date +%s | sha256sum | base64 | head -c 32 ; echo)
-        echo $oldhostname >> /tmp/hostname.log
-        echo $new_host_name >> /tmp/hostname.log
-        if [ $oldhostname != $new_host_name ]; then
-            echo "old != new" >> /tmp/hostname.log
-            # Rename Host
-            echo $new_host_name > /etc/hostname
-            hostname -F /etc/hostname
-            # Update /etc/hosts if needed
-            line=127.0.1.1'\t'$new_host_name
-            sed -i "/127.0.1.1/c$line" /etc/hosts
-            # Recreate SSH2 keys
-            export DEBIAN_FRONTEND=noninteractive 
-            dpkg-reconfigure openssh-server
-        fi
-    fi
-  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+#- content: |
+#    #!/bin/sh
+#    if [ $reason = "BOUND" ]; then
+#        oldhostname=$(hostname -s)
+#        new_host_name=master-$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+#        echo $oldhostname >> /tmp/hostname.log
+#        echo $new_host_name >> /tmp/hostname.log
+#        if [ $oldhostname != $new_host_name ]; then
+#            echo "old != new" >> /tmp/hostname.log
+#            # Rename Host
+#            echo $new_host_name > /etc/hostname
+#            hostname -F /etc/hostname
+#            # Update /etc/hosts if needed
+#            line=127.0.1.1'\t'$new_host_name
+#            sed -i "/127.0.1.1/c$line" /etc/hosts
+#            # Recreate SSH2 keys
+#            export DEBIAN_FRONTEND=noninteractive 
+#            dpkg-reconfigure openssh-server
+#        fi
+#    fi
+#  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
 #------------------
 
 # Prometheus config
@@ -333,6 +333,15 @@ runcmd:
   - adduser --disabled-password --gecos "" prometheus
   - /bin/consul-set-network.sh
   - sudo dhclient
+  - oldhostname=$(hostname -s)
+  - new_host_name=master-$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+  - echo $new_host_name > /etc/hostname
+  - hostname -F /etc/hostname
+  - line=127.0.1.1'\t'$new_host_name
+  - sed -i "s/$oldhostname/$new_host_name/g" /etc/hosts
+  - echo $line >> /etc/hosts
+  - export DEBIAN_FRONTEND=noninteractive 
+  - dpkg-reconfigure openssh-server
   - resolvconf -u
   - echo nameserver 8.8.8.8 >> /etc/resolv.conf
 #download config files
