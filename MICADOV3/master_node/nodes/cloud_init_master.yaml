@@ -19,7 +19,7 @@ write_files:
 #      resource:
 #        type: cloudsigma
 #        endpoint: YOUR_ENDPOINT
-#        libdrive_id:  IMAGE_UUID 
+#        libdrive_id: UBUNTU_16.04_IMAGE_ID
 #        description:
 #            cpu: 1000
 #            mem: 1073741824
@@ -34,8 +34,9 @@ write_files:
 #                        conf: dhcp
 #
 #      scaling:
-#        min: 2
+#        min: 1
 #        max: 10
+
 #USER DATA - EC2
 #- path: /var/lib/micado/occopus/temp_user_data.yaml
 #  content: |
@@ -49,14 +50,37 @@ write_files:
 #        type: ec2
 #        endpoint: YOUR_ENDPOINT
 #        regionname: YOUR_REGION
-#        image_id: YOUR_IMAGE_ID
+#        image_id: UBUNTU_16.04_IMAGE_ID
 #        instance_type: YOUR_INSTANCE_TYPE
 #        key_name: YOUR_KEY_NAME 
 #        security_group_ids:
 #            - YOUR_SECURITY_GROUP_ID
 #      scaling:
-#        min: 2
+#        min: 1
 #        max: 10
+
+#USER DATA - NOVA
+# - path: /var/lib/micado/occopus/temp_user_data.yaml
+#   content: |
+#     user_data:
+#       auth_data:
+#         type: nova
+#         username: YOUR_ACCESS_KEY
+#         password: YOUR_SECRET_KEY
+
+#       resource:
+#         type: nova
+#         endpoint: YOUR_ENDPOINT
+#         network_id: YOUR_NETWORK_ID
+#         image_id: UBUNTU_16.04_IMAGE_ID
+#         flavor_name: YOUR_FLAVOUR_TYPE
+#         server_name: WORKER_NODE
+#         key_name: YOUR_KEYNAME
+#         security_groups: [YOUR_SECURITY_GROUP_ID]
+
+#       scaling:
+#         min: 1
+#         max: 10
 
 # consul config
 - content: |
@@ -347,7 +371,7 @@ runcmd:
   - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/executor_config.sh --create-dirs -o /etc/prometheus_executor/conf.sh
   - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/consul_checks.json --create-dirs -o /etc/consul/checks.json
 #change health check ip address for host ip
-  - sed -i 's/healthcheck_ip_change/'$(hostname --ip-address)'/g' /etc/consul/*
+  - sed -i 's/healthcheck_ip_change/'$(hostname -I | cut -d\  -f1)'/g' /etc/consul/*
 # Docker install
   - apt-get update
   - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget unzip jq dnsmasq
