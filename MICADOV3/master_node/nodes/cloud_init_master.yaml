@@ -7,34 +7,56 @@ package_upgrade: false
 
 
 write_files:
-#USER DATA
-- path: /var/lib/micado/occopus/temp_user_data.yaml
-  content: |
-    user_data:
-      auth_data:
-        type: cloudsigma
-        email: YOUR_EMAIL_ADDRESS
-        password: YOUR_PASSWORD
+#USER DATA - Cloudsigma
+#- path: /var/lib/micado/occopus/temp_user_data.yaml
+#  content: |
+#    user_data:
+#      auth_data:
+#        type: cloudsigma
+#        email: YOUR_EMAIL
+#        password: YOUR_PASSWORD
+#
+#      resource:
+#        type: cloudsigma
+#        endpoint: YOUR_ENDPOINT
+#        libdrive_id:  IMAGE_UUID 
+#        description:
+#            cpu: 1000
+#            mem: 1073741824
+#            vnc_password: secret
+#            pubkeys:
+#                -
+#                    KEY_UUID
+#            nics:
+#                -
+#                     ip_v4_conf:
+#                        conf: dhcp
+#                        conf: dhcp
+#
+#      scaling:
+#        min: 2
+#        max: 10
+#USER DATA - EC2
+#- path: /var/lib/micado/occopus/temp_user_data.yaml
+#  content: |
+#    user_data:
+#      auth_data:
+#        type: ec2
+#        accesskey: YOUR_ACCESS_KEY
+#        secretkey: YOUR_SECRET_KEY
 
-      resource:
-        type: cloudsigma
-        endpoint: https://zrh.cloudsigma.com/api/2.0
-        libdrive_id: 74655f92-b7bb-4084-b4ec-fdbe46d576ca
-        description:
-            cpu: 1000
-            mem: 1073741824
-            vnc_password: secret
-            pubkeys:
-                -
-                    YOUR_PUBLIC_KEY_UID
-            nics:
-                -
-                     ip_v4_conf:
-                        conf: dhcp
-
-      scaling:
-        min: 2
-        max: 10
+#      resource:
+#        type: ec2
+#        endpoint: YOUR_ENDPOINT
+#        regionname: YOUR_REGION
+#        image_id: YOUR_IMAGE_ID
+#        instance_type: YOUR_INSTANCE_TYPE
+#        key_name: YOUR_KEY_NAME 
+#        security_group_ids:
+#            - YOUR_SECURITY_GROUP_ID
+#      scaling:
+#        min: 2
+#        max: 10
 
 # consul config
 - content: |
@@ -72,29 +94,6 @@ write_files:
 #        fi
 #    fi
 #path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
-
-# set hostname
-#- content: |
-#    #!/bin/sh
-#    if [ $reason = "BOUND" ]; then
-#        oldhostname=$(hostname -s)
-#        new_host_name=master-$(date +%s | sha256sum | base64 | head -c 32 ; echo)
-#        echo $oldhostname >> /tmp/hostname.log
-#        echo $new_host_name >> /tmp/hostname.log
-#        if [ $oldhostname != $new_host_name ]; then
-#            echo "old != new" >> /tmp/hostname.log
-#            # Rename Host
-#            echo $new_host_name > /etc/hostname
-#            hostname -F /etc/hostname
-#            # Update /etc/hosts if needed
-#            line=127.0.1.1'\t'$new_host_name
-#            sed -i "/127.0.1.1/c$line" /etc/hosts
-#            # Recreate SSH2 keys
-#            export DEBIAN_FRONTEND=noninteractive 
-#            dpkg-reconfigure openssh-server
-#        fi
-#    fi
-#  path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
 #------------------
 
 # Prometheus config
@@ -355,7 +354,6 @@ runcmd:
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
   - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
   - apt-get update
-  - apt-cache policy docker-ce
   - apt-get install -y docker-ce
   - export IP=$(hostname -I | cut -d\  -f1)
   - sed -i -e "s/-H fd:\/\//-H fd:\/\/ -H tcp:\/\/$IP:2375/g" /lib/systemd/system/docker.service
