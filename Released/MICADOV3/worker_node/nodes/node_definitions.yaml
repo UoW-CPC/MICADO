@@ -1,0 +1,22 @@
+'node_def:worker':
+  - resource:
+      type: cloudsigma
+      endpoint: https://zrh.cloudsigma.com/api/2.0
+      libdrive_id: 56f027c0-aeb6-478a-9bc0-6368bf702e4f
+      description:
+          cpu: 1000
+          mem: 1073741824
+          vnc_password: secret
+          pubkeys:
+              -
+                   YOUR_PRIVATE_KEY_ID
+          nics:
+              -
+                   ip_v4_conf:
+                      conf: dhcp
+    contextualisation:
+      type: cloudinit 
+      context_template: !yaml_import
+        url: file://cloud_init_worker.yaml
+
+

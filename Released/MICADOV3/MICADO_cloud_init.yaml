@@ -1,0 +1,434 @@
+#cloud-config
+apt_upgrade: false
+apt_update: false
+manage_etc_hosts: false
+package_update: false
+package_upgrade: false
+
+
+write_files:
+#USER DATA - Cloudsigma
+#- path: /var/lib/micado/occopus/temp_user_data.yaml
+#  content: |
+#    user_data:
+#      auth_data:
+#        type: cloudsigma
+#        email: YOUR_EMAIL
+#        password: YOUR_PASSWORD
+#
+#      resource:
+#        type: cloudsigma
+#        endpoint: YOUR_ENDPOINT
+#        libdrive_id: UBUNTU_16.04_IMAGE_ID
+#        description:
+#            cpu: 1000
+#            mem: 1073741824
+#            vnc_password: secret
+#            pubkeys:
+#                -
+#                    KEY_UUID
+#            nics:
+#                -
+#                     ip_v4_conf:
+#                        conf: dhcp
+#                        conf: dhcp
+#
+#      scaling:
+#        min: 1
+#        max: 10
+
+#USER DATA - EC2
+#- path: /var/lib/micado/occopus/temp_user_data.yaml
+#  content: |
+#    user_data:
+#      auth_data:
+#        type: ec2
+#        accesskey: YOUR_ACCESS_KEY
+#        secretkey: YOUR_SECRET_KEY
+
+#      resource:
+#        type: ec2
+#        endpoint: YOUR_ENDPOINT
+#        regionname: YOUR_REGION
+#        image_id: UBUNTU_16.04_IMAGE_ID
+#        instance_type: YOUR_INSTANCE_TYPE
+#        key_name: YOUR_KEY_NAME 
+#        security_group_ids:
+#            - YOUR_SECURITY_GROUP_ID
+#      scaling:
+#        min: 1
+#        max: 10
+
+#USER DATA - Cloud Broker
+#- path: /var/lib/micado/occopus/temp_user_data.yaml
+#  content: |
+#    user_data:
+#      auth_data:
+#        type: cloudbroker
+#        email: YOUR_CLOUDBROKER_EMAIL
+#        password: YOUR_CLOUDBROKER_PASSWORD
+
+#      resource:
+#        type: cloudbroker
+#        endpoint: YOUR_ENDPOINT
+#        description: 
+#          deployment_id: YOUR_DEPLOYMENT_ID
+#          instance_type_id: YOUR_INSTANCE_TYPE_ID
+#          key_pair_id: YOUR_KEY_PAIR_ID
+#          opened_port: PORTS_TO_BE_OPENED # 80, 443, 22, 53, 2375, 2377, 7946, 8080, 8300, 8301, 8302, 8400, 8500, 8600, 9090, 9093, 9095, 9100, 9200
+#
+#      scaling:
+#        min: 1
+#        max: 10
+
+#USER DATA - NOVA
+# - path: /var/lib/micado/occopus/temp_user_data.yaml
+#   content: |
+#     user_data:
+#       auth_data:
+#         type: nova
+#         username: YOUR_USERNAME
+#         password: YOUR_PASSWORD
+
+#       resource:
+#         type: nova
+#         endpoint: YOUR_ENDPOINT
+#         network_id: YOUR_NETWORK_ID
+#         image_id: UBUNTU_16.04_IMAGE_ID
+#         flavor_name: YOUR_FLAVOUR_TYPE
+#         server_name: WORKER_NODE
+#         key_name: YOUR_KEYNAME
+#         security_groups: [YOUR_SECURITY_GROUP_ID]
+
+#       scaling:
+#         min: 1
+#         max: 10
+
+# consul config
+- content: |
+    {
+    "server": true,
+    "datacenter": "application",
+    "encrypt": "uohStneoKEoVYZIASGp6Nw==",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "services": [{"name":"prometheus"}, {"name":"alertmanager"}, {"name":"prometheus_executor"}, {"name":"consul"}]
+    }
+  path: /etc/consul/config.json
+
+# set hostname
+#- content: |
+#    #!/bin/sh
+#    if [ $reason = "BOUND" ]; then
+#        oldhostname=$(hostname -s)
+#        if [ $oldhostname != $new_host_name ]; then
+#            # Rename Host
+#            echo $new_host_name > /etc/hostname
+#            hostname -F /etc/hostname
+#            # Update /etc/hosts if needed
+#            TMPHOSTS=/etc/hosts.dhcp.new
+#            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
+#                # Remove the 127.0.1.1 put there by the debian installer
+#                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
+#                # Add the our new ip address and name
+#                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
+#                mv $TMPHOSTS /etc/hosts
+#            fi
+#            # Recreate SSH2 keys
+#            export DEBIAN_FRONTEND=noninteractive 
+#            dpkg-reconfigure openssh-server
+#        fi
+#    fi
+#path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
+#------------------
+
+# Prometheus config
+- path: /etc/prometheus/prometheus.yml
+  content: |
+    rule_files:
+    - 'prometheus.rules'
+    scrape_configs:
+    - job_name: cluster_monitoring
+      scrape_interval: 10s
+      consul_sd_configs:
+      - server: '172.31.0.5:8500'
+        datacenter: application
+        services: ['lb_cluster', 'worker_cluster', 'app_docker_cluster']
+      relabel_configs:
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'job'
+        replacement:   '$1'
+      - source_labels: ['__meta_consul_service']
+        regex:         '(.*)'
+        target_label:  'group'
+        replacement:   '$1'
+    alerting:
+      alertmanagers:
+      - scheme: http
+        static_configs:
+        - targets:
+          - "172.31.0.3:9093"
+
+# Prometheus rules (expressions and alerts)
+- path: /etc/prometheus/prometheus.rules
+  content: |
+
+    worker_cpu_utilization = 100 - (avg (rate(node_cpu{group="worker_cluster",mode="idle"}[60s])) * 100)
+    worker_ram_utilization = (sum(node_memory_MemFree{job="worker_cluster"}) / sum(node_memory_MemTotal{job="worker_cluster"})) * 100
+    worker_hdd_utilization = sum(node_filesystem_free{job="worker_cluster",mountpoint="/", device="rootfs"}) / sum(node_filesystem_size{job="worker_cluster",mountpoint="/", device="rootfs"}) *100
+        
+        ALERT worker_overloaded
+          IF worker_cpu_utilization > 60
+          FOR 1m
+          LABELS {alert="overloaded", cluster="worker_cluster", node="worker", infra_id="micado_worker_infra", type="VM"}
+          ANNOTATIONS {
+          summary = "Application cluster overloaded"}
+        
+        ALERT worker_underloaded
+          IF worker_cpu_utilization < 20
+          FOR 2m
+          LABELS {alert="underloaded", cluster="worker_cluster", node="worker", infra_id="micado_worker_infra", type="VM"}
+          ANNOTATIONS {
+          summary = "Application cluster underloaded"}
+
+
+
+
+
+# alertmanager
+- path: /etc/alertmanager/config.yml
+  content: |
+    global:
+    
+    # The root route on which each incoming alert enters.
+    # The root route with all parameters, which are inherited by the child
+    # routes if they are not overwritten.
+    route:
+      receiver: 'default'
+      group_wait: 10s
+      group_interval: 20s
+      repeat_interval: 40s
+      group_by: [alertname]
+    
+    receivers:
+    - name: 'default'
+      webhook_configs: 
+       - url: http://172.31.0.4:9095
+
+
+# alertgenerator config
+- path: /etc/prometheus/alert_generator.sh
+  content: |
+    #!/bin/bash
+
+    while true
+    do
+
+    #getservices
+    curl -X GET http://hostIP:2375/v1.27/services > getservices.json
+
+    jq '. | length-1' getservices.json > nmbservices
+    jq '.[].Spec.Name' getservices.json | sed 's/.//;s/.$//' > servicenames
+    grep ALERT "/etc/prometheus/prometheus.rules" | sed  's/ALERT\s*//g;s/^ *//;s/_.*//' | awk '!seen[$0]++' > alertnames
+    cat alertnames | wc -l > nmbalerts
+    nmbservices=$(cat nmbservices)
+    for i in $(seq 0 $nmbservices); do
+      echo "${i}" > counter
+      # set the cpu limit from the config, cut get back 0-100 value
+      cpulimit=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.TaskTemplate.Resources.Limits.NanoCPUs' getservices.json | cut -c 1-2)
+      
+      if [ "$cpulimit" = "nu" ]; then
+        cpulimit=95
+      fi
+      ((cpulimit-=10)) # top limit adjust so it can overload
+      name=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.Name' getservices.json | sed 's/.//;s/.$//')
+      namequotes=$(jq --slurpfile newvalue counter '.[$newvalue[0]].Spec.Name' getservices.json)
+
+      #create new rules
+      if [ -n "$name" ]; then
+      if grep -q $name "/etc/prometheus/prometheus.rules"; then
+          echo "already exists"     
+      else
+          echo "create new rule named $name " 
+
+          echo "ALERT $name"_overloaded"
+          IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes }[30s]))*100 > $cpulimit
+          FOR 30s
+          LABELS {alert="'"overloaded"'", type="'"docker"'", application=$namequotes}
+          ANNOTATIONS {
+          summary = "'"overloaded"'"}
+
+          ALERT $name"_underloaded"
+          IF avg(rate(container_cpu_usage_seconds_total{container_label_com_docker_swarm_service_name=$namequotes }[30s]))*100 < 20
+          FOR 30s
+          LABELS {alert="'"underloaded"'", type="'"docker"'", application=$namequotes}
+          ANNOTATIONS {
+          summary = "'"underloaded"'"}" >> /etc/prometheus/prometheus.rules
+      fi
+      fi
+      done
+
+
+
+    echo "remove olds"
+    # remove old alerts
+    nmbalerts=$(cat nmbalerts)
+    echo "nmb of alerts  $nmbalerts"
+
+    for e in $(seq 1 $nmbalerts); do
+      alertnametemp=$(sed "${e}q;d" alertnames)
+     echo "current  $alertnametemp"
+      if grep -q $alertnametemp servicenames;then 
+          echo "need"
+      else
+          if [ "$alertnametemp" != "lb" ] && [ "$alertnametemp" != "worker" ];then
+          echo "dont need"
+          #every app has 2 alerts we need the first alert which starts with the name of the service, then delete 12 lines, 2 rules
+          endline=12
+          startline=$(grep -m1 -n "ALERT $alertnametemp" /etc/prometheus/prometheus.rules | awk -F  ":" '{print $1}')
+          ((endline+=startline))
+          sed "$startline,$endline d" /etc/prometheus/prometheus.rules > alerttmp
+          mv alerttmp /etc/prometheus/prometheus.rules
+          fi
+
+      fi
+    done
+    #reload prometheus configuration
+    curl -X POST http://hostIP:9090/-/reload
+    sleep 10
+    done
+
+
+ 
+# executor config
+- path: /etc/prometheus_executor/conf.sh
+  content: |
+       
+
+- content: |
+    #!/bin/bash
+    echo "Setup NETWORK starts."
+    myhost=`hostname`
+    ipaddress=`ifconfig | awk '/inet addr/{print substr($2,6)}' | grep -v 127.0.0.1 | head -n 1`
+    cp /etc/hosts /etc/hosts.old
+    grep -v "$myhost" /etc/hosts.old > /etc/hosts
+
+    echo "IPADDRESS: $ipaddress"
+    echo "$ipaddress $myhost" >> /etc/hosts
+
+    rm -rf /etc/resolvconf/*
+    echo "Setup NETWORK finished."
+  path: /bin/consul-set-network.sh
+  permissions: '755'
+
+- path: /etc/resolvconf/resolv.conf.d/base
+  content: |
+    nameserver 8.8.8.8
+
+- path: /etc/micado/docker-compose.yml
+  content: |
+    version: '3.3'
+
+    services:
+       submitter:
+         image: micado/micado-submitter
+         container_name: micado-submitter
+         volumes:
+          - "/var/run/docker.sock:/var/run/docker.sock"
+          - "/etc/micado/occopus/:/etc/micado/occopus/"
+          - "/var/lib/micado/occopus/:/var/lib/micado/occopus/"
+         environment:
+          #Input template files
+           TEMP_AUTH_DATA_FILE: /var/lib/micado/occopus/temp_auth_data.yaml
+           TEMP_NODE_DEF_FILE: /var/lib/micado/occopus/temp_node_definitions.yaml
+           TEMP_INFRA_DEF_FILE: /var/lib/micado/occopus/temp_infrastructure_descriptor.yaml
+           #Input user data files
+           USER_DATA_FILE: /var/lib/micado/occopus/temp_user_data.yaml
+           #Output occopus descriptors
+           AUTH_DATA_FILE: /etc/micado/occopus/auth_data.yaml
+           NODE_DEF_FILE: /etc/micado/occopus/nodes/node_definitions.yaml
+           INFRA_DEF_FILE: /etc/micado/occopus/infrastructure_descriptor.yaml
+           MASTER_IP: $IP
+           WORKER_INFRA_NAME: micado_worker_infra
+         command: python /app/submitter/submitter.py
+       redis:
+        image: redis
+        container_name: occopus_redis
+        volumes:
+          - "/var/lib/micado/occopus/redis:/data/"
+        command: redis-server --appendonly yes
+       occopus:
+        depends_on:
+          - redis
+          - submitter
+        image: micado/occopus:1.5
+        container_name: occopus
+        links:
+          - redis
+        ports:
+          - 5000:5000
+        volumes:
+          - "/etc/micado/occopus/:/etc/micado/occopus/"
+        environment:
+          - REDIS_NAME=redis
+        command: occopus-rest-service --auth_data_path /etc/micado/occopus/auth_data.yaml --host "$HOST_IP"
+
+runcmd:
+  - adduser --disabled-password --gecos "" prometheus
+  - /bin/consul-set-network.sh
+  - sudo dhclient
+  - oldhostname=$(hostname -s)
+  - new_host_name=master-$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+  - echo $new_host_name > /etc/hostname
+  - hostname -F /etc/hostname
+  - line=127.0.1.1'\t'$new_host_name
+  - sed -i "s/$oldhostname/$new_host_name/g" /etc/hosts
+  - echo $line >> /etc/hosts
+  - export DEBIAN_FRONTEND=noninteractive 
+  - dpkg-reconfigure openssh-server
+  - resolvconf -u
+  - echo nameserver 8.8.8.8 >> /etc/resolv.conf
+#download config files
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/executor_config.sh --create-dirs -o /etc/prometheus_executor/conf.sh
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/config_files/consul_checks.json --create-dirs -o /etc/consul/checks.json
+#change health check ip address for host ip
+  - sed -i 's/healthcheck_ip_change/'$(hostname -I | cut -d\  -f1)'/g' /etc/consul/*
+# Docker install
+  - apt-get update
+  - apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl software-properties-common wget unzip jq dnsmasq
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update
+  - apt-get install -y docker-ce
+  - export IP=$(hostname -I | cut -d\  -f1)
+  - sed -i -e "s/-H fd:\/\//-H fd:\/\/ -H tcp:\/\/$IP:2375/g" /lib/systemd/system/docker.service
+  - systemctl daemon-reload
+  - service docker restart
+# Install Docker Compose
+  - curl -L https://github.com/docker/compose/releases/download/1.16.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+# Start Swarm
+  - docker swarm init --advertise-addr=$IP
+  - docker node update --availability drain $(hostname)
+# update executor IP
+  - export IP=$(hostname -I | cut -d\  -f1)
+  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh
+  - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus/alert_generator.sh
+#Start infra. services
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/templates/temp_auth_data.yaml --create-dirs -o /var/lib/micado/occopus/temp_auth_data.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/templates/temp_node_definitions.yaml --create-dirs -o /var/lib/micado/occopus/temp_node_definitions.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/infrastructure_descriptor.yaml  --create-dirs -o /var/lib/micado/occopus/temp_infrastructure_descriptor.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/nodes/cloud_init_worker.yaml --create-dirs -o /etc/micado/occopus/nodes/cloud_init_worker.yaml
+  - docker-compose -f /etc/micado/docker-compose.yml up -d
+  - chmod 777 /etc/prometheus_executor/conf.sh
+  - chmod 777 /etc/prometheus/alert_generator.sh
+  - docker network create -d bridge my-net --subnet 172.31.0.0/24
+  - docker run -d --network=my-net --ip="172.31.0.2" -p 9090:9090 -v /etc/:/etc prom/prometheus
+  - docker run -d --network=my-net --ip="172.31.0.3" -v /etc/alertmanager/:/etc/alertmanager/ -p 9093:9093 prom/alertmanager
+  - docker run -d --network=my-net --ip="172.31.0.4" -p 9095:9095 -v /etc/prometheus_executor/:/etc/prometheus_executor micado/prometheus_executor
+  - export IP=$(hostname -I | cut -d\  -f1)
+  - docker run -d --network=my-net --ip="172.31.0.5" -p 8301:8301 -p 8301:8301/udp -p 8300:8300 -p 8302:8302 -p 8302:8302/udp -p 8400:8400 -p 8500:8500 -p 8600:8600/udp  -v /etc/consul/:/etc/consul  -e 'CONSUL_LOCAL_CONFIG={"skip_leave_on_interrupt":true}'  consul agent -server -client=0.0.0.0 -advertise=$IP -bootstrap=true -ui -config-dir=/etc/consul
+  - docker run -d --name MYSQL_DATABASE -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=dataavenue -e MYSQL_USER=da -e MYSQL_PASSWORD=da -p 3306:3306 mysql/mysql-server:5.5
+  - docker run -d -v /etc/prometheus/:/etc/prometheus micado/alert_generator:1.0
+
