@@ -116,31 +116,6 @@ write_files:
     }
   path: /etc/consul/config.json
 
-# set hostname
-#- content: |
-#    #!/bin/sh
-#    if [ $reason = "BOUND" ]; then
-#        oldhostname=$(hostname -s)
-#        if [ $oldhostname != $new_host_name ]; then
-#            # Rename Host
-#            echo $new_host_name > /etc/hostname
-#            hostname -F /etc/hostname
-#            # Update /etc/hosts if needed
-#            TMPHOSTS=/etc/hosts.dhcp.new
-#            if ! grep "$new_ip_address $new_host_name.$new_domain_name $new_host_name" /etc/hosts; then
-#                # Remove the 127.0.1.1 put there by the debian installer
-#                grep -v '127\.0\.1\.1 ' < /etc/hosts > $TMPHOSTS
-#                # Add the our new ip address and name
-#                echo "$new_ip_address $new_host_name.$new_domain_name $new_host_name" >> $TMPHOSTS
-#                mv $TMPHOSTS /etc/hosts
-#            fi
-#            # Recreate SSH2 keys
-#            export DEBIAN_FRONTEND=noninteractive 
-#            dpkg-reconfigure openssh-server
-#        fi
-#    fi
-#path: /etc/dhcp/dhclient-exit-hooks.d/sethostname
-#------------------
 
 # Prometheus config
 - path: /etc/prometheus/prometheus.yml
@@ -416,10 +391,10 @@ runcmd:
   - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus_executor/conf.sh
   - sed -i -e 's/hostIP/'$IP'/g' /etc/prometheus/alert_generator.sh
 #Start infra. services
-  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/templates/temp_auth_data.yaml --create-dirs -o /var/lib/micado/occopus/temp_auth_data.yaml
-  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/templates/temp_node_definitions.yaml --create-dirs -o /var/lib/micado/occopus/temp_node_definitions.yaml
-  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/infrastructure_descriptor.yaml  --create-dirs -o /var/lib/micado/occopus/temp_infrastructure_descriptor.yaml
-  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/MICADOV3/worker_node/nodes/cloud_init_worker.yaml --create-dirs -o /etc/micado/occopus/nodes/cloud_init_worker.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/MICADOV3/worker_node/templates/temp_auth_data.yaml --create-dirs -o /var/lib/micado/occopus/temp_auth_data.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/MICADOV3/worker_node/templates/temp_node_definitions.yaml --create-dirs -o /var/lib/micado/occopus/temp_node_definitions.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/MICADOV3/worker_node/infrastructure_descriptor.yaml  --create-dirs -o /var/lib/micado/occopus/temp_infrastructure_descriptor.yaml
+  - curl -L https://github.com/UniversityOfWestminster/MICADO/raw/master/Released/MICADOV3/worker_node/nodes/cloud_init_worker.yaml --create-dirs -o /etc/micado/occopus/nodes/cloud_init_worker.yaml
   - docker-compose -f /etc/micado/docker-compose.yml up -d
   - chmod 777 /etc/prometheus_executor/conf.sh
   - chmod 777 /etc/prometheus/alert_generator.sh
