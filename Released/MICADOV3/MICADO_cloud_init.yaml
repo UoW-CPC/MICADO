@@ -31,7 +31,6 @@ write_files:
 #                -
 #                     ip_v4_conf:
 #                        conf: dhcp
-#                        conf: dhcp
 #
 #      scaling:
 #        min: 1
