@@ -1,6 +1,6 @@
 # MICADO
 
-This repository was an early home of the MiCADO framework, but most of the development took place at github.com/micado-scale. MiCADO was developed as part of COLA, an EU Horizon2020 initiative. COLA has now ended, but MiCADO development will continue.
+This repository was an early home of the MiCADO framework, but most of the development took place at www.github.com/micado-scale. MiCADO was developed as part of COLA, an EU Horizon2020 initiative. COLA has now ended, but MiCADO development will continue.
 
 
 
